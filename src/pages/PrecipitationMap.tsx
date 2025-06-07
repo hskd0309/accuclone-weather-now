@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
-import { Map, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Map, ExternalLink, AlertTriangle, ArrowLeft, Maximize } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const PrecipitationMap = () => {
   const [hasError, setHasError] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const handleIframeError = () => {
     setHasError(true);
@@ -13,23 +15,55 @@ const PrecipitationMap = () => {
     window.open('https://zoom.earth/maps/precipitation/', '_blank');
   };
 
+  const toggleFullscreen = () => {
+    if (!isFullscreen) {
+      document.documentElement.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+    setIsFullscreen(!isFullscreen);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <div className="p-6 border-b border-gray-200">
-            <h1 className="text-2xl font-bold flex items-center">
-              <Map className="w-6 h-6 text-blue-500 mr-2" />
-              Precipitation Map
-            </h1>
-            <p className="text-gray-600 mt-2">Real-time precipitation radar from Zoom Earth</p>
-            <button
-              onClick={openInNewTab}
-              className="mt-3 inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              <ExternalLink className="w-4 h-4 mr-2" />
-              Open in New Tab
-            </button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Link 
+                  to="/" 
+                  className="mr-4 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Back to Home"
+                >
+                  <ArrowLeft className="w-5 h-5 text-gray-600" />
+                </Link>
+                <div>
+                  <h1 className="text-2xl font-bold flex items-center">
+                    <Map className="w-6 h-6 text-blue-500 mr-2" />
+                    Precipitation Map
+                  </h1>
+                  <p className="text-gray-600 mt-2">Real-time precipitation radar from Zoom Earth</p>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={toggleFullscreen}
+                  className="inline-flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  title="Toggle Fullscreen"
+                >
+                  <Maximize className="w-4 h-4 mr-2" />
+                  Fullscreen
+                </button>
+                <button
+                  onClick={openInNewTab}
+                  className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open in New Tab
+                </button>
+              </div>
+            </div>
           </div>
           
           <div className="relative" style={{ height: 'calc(100vh - 200px)' }}>
@@ -56,6 +90,7 @@ const PrecipitationMap = () => {
                 className="w-full h-full border-0"
                 title="Precipitation Map"
                 allow="geolocation"
+                sandbox="allow-scripts allow-same-origin allow-forms"
                 onError={handleIframeError}
                 onLoad={(e) => {
                   // Check if iframe loaded successfully
