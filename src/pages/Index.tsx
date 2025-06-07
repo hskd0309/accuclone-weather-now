@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import LoadingScreen from '@/components/LoadingScreen';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
@@ -7,17 +7,19 @@ import CurrentWeather from '@/components/weather/CurrentWeather';
 import HourlyForecast from '@/components/weather/HourlyForecast';
 import DailyForecast from '@/components/weather/DailyForecast';
 import Favorites from '@/components/weather/Favorites';
-import WeatherMap from '@/components/weather/WeatherMap';
 import { weatherService, WeatherData } from '@/services/weatherService';
 import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
+  const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('current');
   const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null);
   const [currentLocation, setCurrentLocation] = useState({ lat: 0, lon: 0 });
   const [currentCity, setCurrentCity] = useState('Loading...');
   const { toast } = useToast();
+
+  const activeTab = searchParams.get('tab') || 'current';
 
   useEffect(() => {
     // Show loading screen for 3 seconds
@@ -96,8 +98,6 @@ const Index = () => {
         return <DailyForecast location={currentLocation} />;
       case 'favorites':
         return <Favorites onCitySelect={handleSearch} />;
-      case 'map':
-        return <WeatherMap location={currentLocation} />;
       default:
         return <CurrentWeather weather={currentWeather} location={currentLocation} />;
     }
@@ -113,7 +113,7 @@ const Index = () => {
             onSearch={handleSearch}
             onLocationClick={handleLocationClick}
           />
-          <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+          <Navigation />
           <main className="max-w-7xl mx-auto p-4">
             {renderActiveTab()}
           </main>

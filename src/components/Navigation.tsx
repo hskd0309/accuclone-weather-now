@@ -1,20 +1,27 @@
 
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Home, Clock, Calendar, Heart, Map } from 'lucide-react';
 
-interface NavigationProps {
-  activeTab: string;
-  onTabChange: (tab: string) => void;
-}
+const Navigation: React.FC = () => {
+  const location = useLocation();
+  const currentPath = location.pathname;
 
-const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
   const tabs = [
-    { id: 'current', label: 'Current', icon: Home },
-    { id: 'hourly', label: 'Hourly', icon: Clock },
-    { id: 'daily', label: 'Daily', icon: Calendar },
-    { id: 'favorites', label: 'Favorites', icon: Heart },
-    { id: 'map', label: 'Map', icon: Map },
+    { id: 'current', label: 'Current', icon: Home, path: '/' },
+    { id: 'hourly', label: 'Hourly', icon: Clock, path: '/?tab=hourly' },
+    { id: 'daily', label: 'Daily', icon: Calendar, path: '/?tab=daily' },
+    { id: 'favorites', label: 'Favorites', icon: Heart, path: '/?tab=favorites' },
+    { id: 'map', label: 'Map', icon: Map, path: '/precipitation-map' },
   ];
+
+  const getActiveTab = () => {
+    if (currentPath === '/precipitation-map') return 'map';
+    const urlParams = new URLSearchParams(location.search);
+    return urlParams.get('tab') || 'current';
+  };
+
+  const activeTab = getActiveTab();
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
@@ -23,9 +30,9 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
-              <button
+              <Link
                 key={tab.id}
-                onClick={() => onTabChange(tab.id)}
+                to={tab.path}
                 className={`flex items-center space-x-2 px-4 py-3 border-b-2 whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-600'
@@ -34,7 +41,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
               >
                 <Icon size={18} />
                 <span className="font-medium">{tab.label}</span>
-              </button>
+              </Link>
             );
           })}
         </div>
