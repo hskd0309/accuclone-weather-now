@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import LoadingScreen from '@/components/LoadingScreen';
@@ -13,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 const Index = () => {
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('current');
   const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null);
   const [currentLocation, setCurrentLocation] = useState({ lat: 0, lon: 0 });
   const [currentCity, setCurrentCity] = useState('Loading...');
