@@ -1,27 +1,15 @@
 
-import React, { useState } from 'react';
-import { Map, ExternalLink, AlertTriangle, ArrowLeft, Maximize } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Map, ExternalLink, ArrowLeft, Globe } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const PrecipitationMap = () => {
-  const [hasError, setHasError] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  const handleIframeError = () => {
-    setHasError(true);
-  };
-
-  const openInNewTab = () => {
+  const openMap = () => {
     window.open('https://zoom.earth/maps/precipitation/', '_blank');
   };
 
-  const toggleFullscreen = () => {
-    if (!isFullscreen) {
-      document.documentElement.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
-    }
-    setIsFullscreen(!isFullscreen);
+  const redirectToMap = () => {
+    window.location.href = 'https://zoom.earth/maps/precipitation/';
   };
 
   return (
@@ -46,65 +34,39 @@ const PrecipitationMap = () => {
                   <p className="text-gray-600 mt-2">Real-time precipitation radar from Zoom Earth</p>
                 </div>
               </div>
-              <div className="flex space-x-2">
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-center h-96 bg-gradient-to-br from-blue-50 to-blue-100">
+            <div className="text-center p-8 max-w-md">
+              <Globe className="w-20 h-20 text-blue-500 mx-auto mb-6" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Interactive Precipitation Map</h2>
+              <p className="text-gray-600 mb-6">
+                View real-time precipitation data and weather patterns from around the world with our interactive radar map.
+              </p>
+              
+              <div className="space-y-3">
                 <button
-                  onClick={toggleFullscreen}
-                  className="inline-flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                  title="Toggle Fullscreen"
+                  onClick={redirectToMap}
+                  className="w-full inline-flex items-center justify-center px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
                 >
-                  <Maximize className="w-4 h-4 mr-2" />
-                  Fullscreen
+                  <Map className="w-5 h-5 mr-2" />
+                  Open Precipitation Map
                 </button>
+                
                 <button
-                  onClick={openInNewTab}
-                  className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  onClick={openMap}
+                  className="w-full inline-flex items-center justify-center px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Open in New Tab
                 </button>
               </div>
+              
+              <p className="text-sm text-gray-500 mt-4">
+                Powered by Zoom Earth's real-time weather data
+              </p>
             </div>
-          </div>
-          
-          <div className="relative" style={{ height: 'calc(100vh - 200px)' }}>
-            {hasError ? (
-              <div className="flex items-center justify-center h-full bg-gray-100">
-                <div className="text-center p-8">
-                  <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Unable to Load Map</h3>
-                  <p className="text-gray-600 mb-4">
-                    The precipitation map couldn't be loaded directly. Please use the button above to open it in a new tab.
-                  </p>
-                  <button
-                    onClick={openInNewTab}
-                    className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Open Zoom Earth Map
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <iframe
-                src="https://zoom.earth/maps/precipitation/"
-                className="w-full h-full border-0"
-                title="Precipitation Map"
-                allow="geolocation"
-                sandbox="allow-scripts allow-same-origin allow-forms"
-                onError={handleIframeError}
-                onLoad={(e) => {
-                  // Check if iframe loaded successfully
-                  try {
-                    const iframe = e.target as HTMLIFrameElement;
-                    if (!iframe.contentWindow) {
-                      setHasError(true);
-                    }
-                  } catch (error) {
-                    setHasError(true);
-                  }
-                }}
-              />
-            )}
           </div>
         </div>
       </div>
