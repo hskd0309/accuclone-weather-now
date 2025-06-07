@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import LoadingScreen from '@/components/LoadingScreen';
@@ -9,7 +10,6 @@ import DailyForecast from '@/components/weather/DailyForecast';
 import Favorites from '@/components/weather/Favorites';
 import { weatherService, WeatherData } from '@/services/weatherService';
 import { useToast } from '@/hooks/use-toast';
-import { useWeatherBackground } from '@/hooks/useWeatherBackground';
 
 const Index = () => {
   const [searchParams] = useSearchParams();
@@ -20,7 +20,6 @@ const Index = () => {
   const { toast } = useToast();
 
   const activeTab = searchParams.get('tab') || 'current';
-  const weatherBackground = useWeatherBackground(currentWeather);
 
   useEffect(() => {
     // Show loading screen for 3 seconds
@@ -108,7 +107,7 @@ const Index = () => {
     <>
       <LoadingScreen isVisible={isLoading} />
       {!isLoading && (
-        <div className={`min-h-screen ${weatherBackground} transition-all duration-1000`}>
+        <div className="min-h-screen bg-gray-50">
           <Header
             currentCity={currentCity}
             onSearch={handleSearch}
@@ -116,9 +115,7 @@ const Index = () => {
           />
           <Navigation />
           <main className="max-w-7xl mx-auto p-4">
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6">
-              {renderActiveTab()}
-            </div>
+            {renderActiveTab()}
           </main>
         </div>
       )}
