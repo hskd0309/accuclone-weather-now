@@ -55,14 +55,18 @@ app.get('/api/onecall', async (req, res) => {
         time: new Date(hour.dt * 1000).toISOString(),
         temperature: hour.temp,
         icon: hour.weather[0].icon,
-        description: hour.weather[0].description
+        description: hour.weather[0].description,
+        humidity: hour.humidity,
+        windSpeed: hour.wind_speed
       })),
       daily: data.daily.map(day => ({
         date: new Date(day.dt * 1000).toISOString(),
         minTemp: day.temp.min,
         maxTemp: day.temp.max,
         icon: day.weather[0].icon,
-        description: day.weather[0].description
+        description: day.weather[0].description,
+        humidity: day.humidity,
+        windSpeed: day.wind_speed
       }))
     };
     
@@ -95,6 +99,45 @@ app.get('/api/city', async (req, res) => {
   } catch (error) {
     console.error('Geocoding API error:', error);
     res.status(500).json({ error: 'Failed to search city' });
+  }
+});
+
+// New endpoint for historical weather data (simulated for demo)
+app.get('/api/historical', async (req, res) => {
+  try {
+    const { lat, lon, days = 7 } = req.query;
+    
+    // In a real application, you would fetch actual historical data
+    // For now, we'll simulate it based on current weather patterns
+    const currentWeather = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
+    );
+    const current = await currentWeather.json();
+    
+    const historicalData = [];
+    const baseTemp = current.main.temp;
+    
+    for (let i = parseInt(days); i > 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      
+      // Simulate temperature variations
+      const tempVariation = (Math.random() - 0.5) * 10;
+      const seasonalVariation = Math.sin((date.getMonth() / 12) * 2 * Math.PI) * 5;
+      
+      historicalData.push({
+        date: date.toISOString(),
+        temperature: baseTemp + tempVariation + seasonalVariation,
+        humidity: current.main.humidity + (Math.random() - 0.5) * 20,
+        windSpeed: current.wind.speed + (Math.random() - 0.5) * 5,
+        pressure: current.main.pressure + (Math.random() - 0.5) * 20
+      });
+    }
+    
+    res.json(historicalData);
+  } catch (error) {
+    console.error('Historical API error:', error);
+    res.status(500).json({ error: 'Failed to fetch historical data' });
   }
 });
 

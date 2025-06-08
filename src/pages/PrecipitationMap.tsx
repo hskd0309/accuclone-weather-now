@@ -1,69 +1,51 @@
 
 import React, { useState, useEffect } from 'react';
-import { Map, ExternalLink, ArrowLeft, Globe, Radar, Satellite } from 'lucide-react';
+import { Map, ExternalLink, ArrowLeft, Globe, Radar, Satellite, Search, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { weatherService } from '@/services/weatherService';
+import { useWeatherBackground } from '@/hooks/useWeatherBackground';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import WeatherChart from '@/components/weather/WeatherChart';
+import SearchSuggestions from '@/components/weather/SearchSuggestions';
 
 const PrecipitationMap = () => {
   const [weather, setWeather] = useState<any>(null);
-  const [location, setLocation] = useState({ lat: 0, lon: 0 });
+  const [location, setLocation] = useState({ lat: 18.229, lon: 83.32 });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [iframeError, setIframeError] = useState(false);
+  const weatherBackground = useWeatherBackground(weather);
 
   useEffect(() => {
     loadWeatherData();
-  }, []);
+  }, [location]);
 
   const loadWeatherData = async () => {
     try {
-      const currentLocation = await weatherService.getCurrentLocation();
-      setLocation(currentLocation);
-      const weatherData = await weatherService.getCurrentWeather(currentLocation.lat, currentLocation.lon);
+      const weatherData = await weatherService.getCurrentWeather(location.lat, location.lon);
       setWeather(weatherData);
     } catch (error) {
       console.error('Failed to load weather:', error);
       // Fallback to New York
-      setLocation({ lat: 40.7128, lon: -74.0060 });
       const fallbackWeather = await weatherService.getCurrentWeather(40.7128, -74.0060);
       setWeather(fallbackWeather);
     }
   };
 
-  const getWeatherBackground = () => {
-    if (!weather) return 'bg-gradient-to-br from-blue-50 to-blue-100';
-    
-    const temp = weather.temperature;
-    const description = weather.description.toLowerCase();
-    
-    if (description.includes('rain') || description.includes('drizzle')) {
-      return 'bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600';
-    } else if (description.includes('snow')) {
-      return 'bg-gradient-to-br from-blue-100 via-blue-200 to-white';
-    } else if (description.includes('cloud')) {
-      return 'bg-gradient-to-br from-gray-200 via-gray-300 to-gray-400';
-    } else if (description.includes('clear') || description.includes('sun')) {
-      if (temp > 25) {
-        return 'bg-gradient-to-br from-yellow-300 via-orange-400 to-red-400';
-      } else {
-        return 'bg-gradient-to-br from-blue-300 via-blue-400 to-blue-500';
-      }
-    } else if (description.includes('thunder') || description.includes('storm')) {
-      return 'bg-gradient-to-br from-purple-600 via-gray-700 to-black';
-    } else if (description.includes('mist') || description.includes('fog')) {
-      return 'bg-gradient-to-br from-gray-300 via-gray-400 to-gray-500';
-    }
-    
-    // Temperature-based fallback
-    if (temp < 0) {
-      return 'bg-gradient-to-br from-blue-200 to-blue-400';
-    } else if (temp < 10) {
-      return 'bg-gradient-to-br from-blue-100 to-blue-300';
-    } else if (temp < 20) {
-      return 'bg-gradient-to-br from-green-200 to-green-400';
-    } else if (temp < 30) {
-      return 'bg-gradient-to-br from-yellow-200 to-yellow-400';
-    } else {
-      return 'bg-gradient-to-br from-orange-300 to-red-400';
+  const handleSearch = async (cityName: string) => {
+    try {
+      const newLocation = await weatherService.searchCity(cityName);
+      setLocation({ lat: newLocation.lat, lon: newLocation.lon });
+      setSearchQuery('');
+      setShowSuggestions(false);
+    } catch (error) {
+      console.error('Search failed:', error);
     }
   };
+
+  const windyMapUrl = `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=default&metricTemp=default&metricWind=default&zoom=4&overlay=rain&product=ecmwf&level=surface&lat=${location.lat}&lon=${location.lon}`;
 
   const mapOptions = [
     {
@@ -87,11 +69,11 @@ const PrecipitationMap = () => {
   ];
 
   return (
-    <div className={`min-h-screen ${getWeatherBackground()} p-4 transition-all duration-1000`}>
-      <div className="max-w-7xl mx-auto">
+    <div className={`min-h-screen ${weatherBackground} transition-all duration-1000`}>
+      <div className="max-w-7xl mx-auto p-4">
         <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg overflow-hidden">
           <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center">
                 <Link 
                   to="/" 
@@ -111,44 +93,122 @@ const PrecipitationMap = () => {
                 </div>
               </div>
             </div>
+
+            {/* Enhanced Search Bar */}
+            <div className="relative max-w-md">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  type="text"
+                  placeholder="Search for a city..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setShowSuggestions(e.target.value.length > 2);
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim()) {
+                      handleSearch(searchQuery);
+                    }
+                  }}
+                  className="pl-10 pr-4 py-2 w-full"
+                />
+              </div>
+              {showSuggestions && (
+                <SearchSuggestions
+                  query={searchQuery}
+                  onSelect={handleSearch}
+                  onClose={() => setShowSuggestions(false)}
+                />
+              )}
+            </div>
           </div>
           
-          <div className="p-8">
-            <div className="text-center mb-8">
-              <Globe className="w-20 h-20 text-blue-500 mx-auto mb-6" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Interactive Weather Maps</h2>
-              <p className="text-gray-600 mb-6">
-                Access real-time weather data, precipitation radar, and satellite imagery from around the world.
-              </p>
-            </div>
+          <div className="p-6">
+            {/* Windy.com Precipitation Map */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Radar className="w-5 h-5 text-blue-500 mr-2" />
+                  Live Precipitation Map
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!iframeError ? (
+                  <div className="relative">
+                    <iframe
+                      width="100%"
+                      height="500"
+                      src={windyMapUrl}
+                      frameBorder="0"
+                      allowFullScreen
+                      onError={() => setIframeError(true)}
+                      className="rounded-lg border border-gray-200"
+                      title="Windy Weather Map"
+                    />
+                    <Button
+                      onClick={() => window.open(windyMapUrl, '_blank')}
+                      className="absolute top-2 right-2 bg-blue-500 hover:bg-blue-600"
+                      size="sm"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-1" />
+                      Fullscreen
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="bg-gray-100 rounded-lg p-8 text-center">
+                    <Globe className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">Map Temporarily Unavailable</h3>
+                    <p className="text-gray-600 mb-4">
+                      The embedded map cannot be displayed due to browser restrictions.
+                    </p>
+                    <Button
+                      onClick={() => window.open(windyMapUrl, '_blank')}
+                      className="bg-blue-500 hover:bg-blue-600"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Open Full Map
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
+            {/* Weather Charts */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <TrendingUp className="w-5 h-5 text-green-500 mr-2" />
+                  Weather Trends
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <WeatherChart location={location} />
+              </CardContent>
+            </Card>
+
+            {/* Alternative Maps */}
             <div className="grid md:grid-cols-3 gap-6">
               {mapOptions.map((option, index) => {
                 const Icon = option.icon;
                 return (
-                  <div key={index} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-                    <Icon className="w-12 h-12 text-blue-500 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-center mb-2">{option.title}</h3>
-                    <p className="text-gray-600 text-center mb-4">{option.description}</p>
-                    <button
-                      onClick={() => window.open(option.url, '_blank')}
-                      className="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Open Map
-                    </button>
-                  </div>
+                  <Card key={index} className="hover:shadow-lg transition-shadow">
+                    <CardContent className="p-6 text-center">
+                      <Icon className="w-12 h-12 text-blue-500 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">{option.title}</h3>
+                      <p className="text-gray-600 mb-4">{option.description}</p>
+                      <Button
+                        onClick={() => window.open(option.url, '_blank')}
+                        className="w-full"
+                        variant="outline"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Open Map
+                      </Button>
+                    </CardContent>
+                  </Card>
                 );
               })}
-            </div>
-
-            <div className="mt-8 bg-blue-50 rounded-lg p-6">
-              <h3 className="text-lg font-semibold mb-3">Why External Maps?</h3>
-              <p className="text-gray-700 leading-relaxed">
-                Due to cross-origin security policies, weather maps cannot be embedded directly. 
-                These external links provide the most accurate and up-to-date weather visualization 
-                tools available, including real-time radar, satellite imagery, and wind patterns.
-              </p>
             </div>
           </div>
         </div>
