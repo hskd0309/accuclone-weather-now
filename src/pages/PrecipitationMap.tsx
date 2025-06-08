@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Map, ExternalLink, ArrowLeft, Globe, Radar, Satellite, Search, TrendingUp } from 'lucide-react';
+import { Map, ExternalLink, ArrowLeft, Globe, Radar, Satellite, Search, TrendingUp, Minimize2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { weatherService } from '@/services/weatherService';
 import { useWeatherBackground } from '@/hooks/useWeatherBackground';
@@ -16,6 +16,7 @@ const PrecipitationMap = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [iframeError, setIframeError] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const weatherBackground = useWeatherBackground(weather);
 
   useEffect(() => {
@@ -67,6 +68,51 @@ const PrecipitationMap = () => {
       icon: Map
     }
   ];
+
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black">
+        <div className="absolute top-4 left-4 z-10">
+          <Button
+            onClick={() => setIsFullscreen(false)}
+            className="bg-white/90 text-black hover:bg-white"
+            size="sm"
+          >
+            <Minimize2 className="w-4 h-4 mr-2" />
+            Exit Fullscreen
+          </Button>
+        </div>
+        {!iframeError ? (
+          <iframe
+            width="100%"
+            height="100%"
+            src={windyMapUrl}
+            frameBorder="0"
+            allowFullScreen
+            onError={() => setIframeError(true)}
+            title="Windy Weather Map"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full bg-gray-900 text-white">
+            <div className="text-center">
+              <Globe className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Map Temporarily Unavailable</h3>
+              <p className="text-gray-400 mb-4">
+                The embedded map cannot be displayed due to browser restrictions.
+              </p>
+              <Button
+                onClick={() => window.open(windyMapUrl, '_blank')}
+                className="bg-blue-500 hover:bg-blue-600"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Open in New Tab
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen ${weatherBackground} transition-all duration-1000`}>
@@ -147,7 +193,7 @@ const PrecipitationMap = () => {
                       title="Windy Weather Map"
                     />
                     <Button
-                      onClick={() => window.open(windyMapUrl, '_blank')}
+                      onClick={() => setIsFullscreen(true)}
                       className="absolute top-2 right-2 bg-blue-500 hover:bg-blue-600"
                       size="sm"
                     >
