@@ -4,7 +4,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import CurrentWeatherPage from "./pages/CurrentWeather";
+import HourlyWeatherPage from "./pages/HourlyWeather";
+import DailyWeatherPage from "./pages/DailyWeather";
+import FavoritesWeatherPage from "./pages/FavoritesWeather";
 import PrecipitationMap from "./pages/PrecipitationMap";
 import NotFound from "./pages/NotFound";
 
@@ -17,9 +20,11 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<CurrentWeatherPage />} />
+          <Route path="/hourly" element={<HourlyWeatherPage />} />
+          <Route path="/daily" element={<DailyWeatherPage />} />
+          <Route path="/favorites" element={<FavoritesWeatherPage />} />
           <Route path="/precipitation-map" element={<PrecipitationMap />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

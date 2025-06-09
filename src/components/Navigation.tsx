@@ -9,22 +9,27 @@ const Navigation: React.FC = () => {
 
   const tabs = [
     { id: 'current', label: 'Current', icon: Home, path: '/' },
-    { id: 'hourly', label: 'Hourly', icon: Clock, path: '/?tab=hourly' },
-    { id: 'daily', label: 'Daily', icon: Calendar, path: '/?tab=daily' },
-    { id: 'favorites', label: 'Favorites', icon: Heart, path: '/?tab=favorites' },
+    { id: 'hourly', label: 'Hourly', icon: Clock, path: '/hourly' },
+    { id: 'daily', label: 'Daily', icon: Calendar, path: '/daily' },
+    { id: 'favorites', label: 'Favorites', icon: Heart, path: '/favorites' },
     { id: 'map', label: 'Map', icon: Map, path: '/precipitation-map' },
   ];
 
   const getActiveTab = () => {
-    if (currentPath === '/precipitation-map') return 'map';
-    const urlParams = new URLSearchParams(location.search);
-    return urlParams.get('tab') || 'current';
+    const pathMap = {
+      '/': 'current',
+      '/hourly': 'hourly',
+      '/daily': 'daily',
+      '/favorites': 'favorites',
+      '/precipitation-map': 'map'
+    };
+    return pathMap[currentPath as keyof typeof pathMap] || 'current';
   };
 
   const activeTab = getActiveTab();
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto">
         <div className="flex space-x-8 overflow-x-auto">
           {tabs.map((tab) => {
@@ -33,10 +38,10 @@ const Navigation: React.FC = () => {
               <Link
                 key={tab.id}
                 to={tab.path}
-                className={`flex items-center space-x-2 px-4 py-3 border-b-2 whitespace-nowrap ${
+                className={`flex items-center space-x-2 px-4 py-3 border-b-2 whitespace-nowrap transition-all duration-200 hover:scale-105 ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-blue-500 text-blue-600 bg-blue-50/50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50/50'
                 }`}
               >
                 <Icon size={18} />
