@@ -1,3 +1,4 @@
+
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
@@ -11,25 +12,42 @@ const WEATHER_API_BASE = 'https://api.weatherapi.com/v1';
 app.use(cors());
 app.use(express.json());
 
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  if (req.query) {
+    console.log('Query params:', req.query);
+  }
+  next();
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    apiKey: WEATHER_API_KEY ? 'configured' : 'missing'
+  });
 });
 
 // API key validation endpoint
 app.get('/api/validate-key', async (req, res) => {
   try {
+    console.log('Validating WeatherAPI key...');
     const response = await fetch(
       `${WEATHER_API_BASE}/current.json?key=${WEATHER_API_KEY}&q=London&aqi=yes`
     );
     const data = await response.json();
     
     if (response.ok) {
+      console.log('WeatherAPI key validation successful');
       res.json({ valid: true, message: 'WeatherAPI key is working' });
     } else {
+      console.error('WeatherAPI key validation failed:', data);
       res.status(401).json({ valid: false, error: data.error?.message || 'API key invalid' });
     }
   } catch (error) {
+    console.error('API key validation error:', error);
     res.status(500).json({ valid: false, error: 'Failed to validate API key' });
   }
 });
@@ -41,27 +59,33 @@ app.get('/api/weather', async (req, res) => {
     
     if (req.query.city) {
       query = req.query.city;
+      console.log(`Fetching weather for city: ${query}`);
     } else if (req.query.lat && req.query.lon) {
       query = `${req.query.lat},${req.query.lon}`;
+      console.log(`Fetching weather for coordinates: ${query}`);
     } else {
+      console.error('No city name or coordinates provided');
       return res.status(400).json({ error: 'City name or coordinates are required' });
     }
 
-    const response = await fetch(
-      `${WEATHER_API_BASE}/current.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(query)}&aqi=yes`
-    );
+    const apiUrl = `${WEATHER_API_BASE}/current.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(query)}&aqi=yes`;
+    console.log(`Making API request to: ${apiUrl}`);
+    
+    const response = await fetch(apiUrl);
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('WeatherAPI error:', errorData);
+      console.error('WeatherAPI error response:', errorData);
       return res.status(response.status).json({ 
         error: errorData.error?.message || 'Weather API call failed' 
       });
     }
     
     const data = await response.json();
+    console.log(`Successfully fetched weather data for: ${data.location?.name}, ${data.location?.country}`);
     
     if (!data || !data.current || !data.location) {
+      console.error('Invalid weather data structure received:', data);
       return res.status(500).json({ error: 'Invalid weather data received' });
     }
     
@@ -98,6 +122,7 @@ app.get('/api/weather', async (req, res) => {
       } : null
     };
     
+    console.log(`Sending weather response for: ${weatherData.city}, ${weatherData.country}`);
     res.json(weatherData);
   } catch (error) {
     console.error('Weather API error:', error);
@@ -112,27 +137,33 @@ app.get('/api/forecast', async (req, res) => {
     
     if (req.query.city) {
       query = req.query.city;
+      console.log(`Fetching forecast for city: ${query}`);
     } else if (req.query.lat && req.query.lon) {
       query = `${req.query.lat},${req.query.lon}`;
+      console.log(`Fetching forecast for coordinates: ${query}`);
     } else {
+      console.error('No city name or coordinates provided for forecast');
       return res.status(400).json({ error: 'City name or coordinates are required' });
     }
 
-    const response = await fetch(
-      `${WEATHER_API_BASE}/forecast.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(query)}&days=10&aqi=yes&alerts=yes`
-    );
+    const apiUrl = `${WEATHER_API_BASE}/forecast.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(query)}&days=10&aqi=yes&alerts=yes`;
+    console.log(`Making forecast API request to: ${apiUrl}`);
+    
+    const response = await fetch(apiUrl);
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Forecast API error:', errorData);
+      console.error('Forecast API error response:', errorData);
       return res.status(response.status).json({ 
         error: errorData.error?.message || 'Forecast API call failed' 
       });
     }
     
     const data = await response.json();
+    console.log(`Successfully fetched forecast data for: ${data.location?.name}, ${data.location?.country}`);
     
     if (!data || !data.forecast || !data.forecast.forecastday) {
+      console.error('Invalid forecast data structure received:', data);
       return res.status(500).json({ error: 'Invalid forecast data received' });
     }
     
@@ -191,7 +222,7 @@ app.get('/api/forecast', async (req, res) => {
       uvIndex: day.day.uv
     }));
     
-    res.json({ 
+    const responseData = { 
       hourly: hourly.slice(0, 24), 
       daily,
       location: {
@@ -200,7 +231,10 @@ app.get('/api/forecast', async (req, res) => {
         lat: data.location.lat,
         lon: data.location.lon
       }
-    });
+    };
+    
+    console.log(`Sending forecast response with ${responseData.hourly.length} hourly and ${responseData.daily.length} daily forecasts`);
+    res.json(responseData);
   } catch (error) {
     console.error('Forecast API error:', error);
     res.status(500).json({ error: 'Failed to fetch forecast data' });
@@ -216,19 +250,21 @@ app.get('/api/search', async (req, res) => {
       return res.status(400).json({ error: 'Search query is required' });
     }
     
-    const response = await fetch(
-      `${WEATHER_API_BASE}/search.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(q)}`
-    );
+    console.log(`Searching cities for query: ${q}`);
+    const apiUrl = `${WEATHER_API_BASE}/search.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(q)}`;
+    
+    const response = await fetch(apiUrl);
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Search API error:', errorData);
+      console.error('Search API error response:', errorData);
       return res.status(response.status).json({ 
         error: errorData.error?.message || 'Search API call failed' 
       });
     }
     
     const data = await response.json();
+    console.log(`Found ${data.length} cities for query: ${q}`);
     
     const cities = data.map(city => ({
       name: city.name,
@@ -253,34 +289,41 @@ app.get('/api/astronomy', async (req, res) => {
     
     if (req.query.city) {
       query = req.query.city;
+      console.log(`Fetching astronomy data for city: ${query}`);
     } else if (req.query.lat && req.query.lon) {
       query = `${req.query.lat},${req.query.lon}`;
+      console.log(`Fetching astronomy data for coordinates: ${query}`);
     } else {
+      console.error('No city name or coordinates provided for astronomy data');
       return res.status(400).json({ error: 'City name or coordinates are required' });
     }
 
-    const response = await fetch(
-      `${WEATHER_API_BASE}/astronomy.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(query)}`
-    );
+    const apiUrl = `${WEATHER_API_BASE}/astronomy.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(query)}`;
+    console.log(`Making astronomy API request to: ${apiUrl}`);
+    
+    const response = await fetch(apiUrl);
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Astronomy API error:', errorData);
+      console.error('Astronomy API error response:', errorData);
       return res.status(response.status).json({ 
         error: errorData.error?.message || 'Astronomy API call failed' 
       });
     }
     
     const data = await response.json();
+    console.log(`Successfully fetched astronomy data`);
     
-    res.json({
+    const astronomyData = {
       sunrise: data.astronomy.astro.sunrise,
       sunset: data.astronomy.astro.sunset,
       moonrise: data.astronomy.astro.moonrise,
       moonset: data.astronomy.astro.moonset,
       moonPhase: data.astronomy.astro.moon_phase,
       moonIllumination: data.astronomy.astro.moon_illumination
-    });
+    };
+    
+    res.json(astronomyData);
   } catch (error) {
     console.error('Astronomy API error:', error);
     res.status(500).json({ error: 'Failed to fetch astronomy data' });
@@ -295,6 +338,7 @@ app.get('/api/precipitation-tile', (req, res) => {
     return res.status(400).json({ error: 'Missing tile parameters (z, x, y)' });
   }
   
+  console.log(`Redirecting to precipitation tile: z=${z}, x=${x}, y=${y}`);
   // Using OpenWeatherMap for tiles since WeatherAPI doesn't provide tiles
   const tileUrl = `https://tile.openweathermap.org/map/precipitation_new/${z}/${x}/${y}.png?appid=d650384a416e774338206719b4f903b3`;
   res.redirect(tileUrl);
@@ -308,6 +352,7 @@ app.use((error, req, res, next) => {
 
 // 404 handler
 app.use((req, res) => {
+  console.log(`404 - Endpoint not found: ${req.method} ${req.url}`);
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
@@ -322,4 +367,5 @@ app.listen(PORT, () => {
   console.log('  GET /api/search - City search/autocomplete');
   console.log('  GET /api/astronomy - Sunrise/sunset data');
   console.log('  GET /api/precipitation-tile - Weather radar tiles');
+  console.log('\nServer ready to receive requests...');
 });
