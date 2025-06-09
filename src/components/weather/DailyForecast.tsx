@@ -23,6 +23,7 @@ const DailyForecast: React.FC<DailyForecastProps> = ({ location }) => {
       setDailyData(data);
     } catch (error) {
       console.error('Failed to load daily data:', error);
+      setDailyData([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -33,6 +34,15 @@ const DailyForecast: React.FC<DailyForecastProps> = ({ location }) => {
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
         <p className="mt-4 text-gray-600">Loading 7-day forecast...</p>
+      </div>
+    );
+  }
+
+  if (dailyData.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-600">No daily forecast data available.</p>
+        <p className="text-sm text-gray-500 mt-2">Try searching for a specific city or enable location services.</p>
       </div>
     );
   }

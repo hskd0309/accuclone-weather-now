@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import LoadingScreen from '@/components/LoadingScreen';
@@ -9,7 +10,7 @@ import DailyForecast from '@/components/weather/DailyForecast';
 import Favorites from '@/components/weather/Favorites';
 import { weatherService, WeatherData } from '@/services/weatherService';
 import { useToast } from '@/hooks/use-toast';
-import { useWeatherBackground } from '@/hooks/useWeatherBackground';
+import { useWeatherTheme } from '@/hooks/useWeatherTheme';
 
 const Index = () => {
   const [searchParams] = useSearchParams();
@@ -17,54 +18,106 @@ const Index = () => {
   const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null);
   const [currentLocation, setCurrentLocation] = useState({ lat: 0, lon: 0 });
   const [currentCity, setCurrentCity] = useState('Loading...');
+  const [isLocationLoading, setIsLocationLoading] = useState(false);
   const { toast } = useToast();
 
   const activeTab = searchParams.get('tab') || 'current';
-  const weatherBackground = useWeatherBackground(currentWeather);
+  const { background } = useWeatherTheme(currentWeather);
 
   useEffect(() => {
-    // Show loading screen for 3 seconds
+    // Show loading screen for 2 seconds, then load weather
     const timer = setTimeout(() => {
       setIsLoading(false);
       loadInitialWeather();
-    }, 3000);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);
 
   const loadInitialWeather = async () => {
     try {
-      const location = await weatherService.getCurrentLocation();
-      await loadWeatherData(location.lat, location.lon);
-    } catch (error) {
-      console.error('Failed to get location:', error);
-      // Fallback to a default city (New York)
-      await loadWeatherData(40.7128, -74.0060);
-      setCurrentCity('New York, NY');
-    }
-  };
+      // Try to get user's real location first
+      setIsLocationLoading(true);
+      console.log('Attempting to get user location...');
+      
+      try {
+        const location = await weatherService.getCurrentLocation();
+        console.log('Got user location:', location);
+        await loadWeatherByCoords(location.lat, location.lon);
+        return;
+      } catch (locationError) {
+        console.log('Location access failed:', locationError);
+      }
 
-  const loadWeatherData = async (lat: number, lon: number) => {
-    try {
-      const weather = await weatherService.getCurrentWeather(lat, lon);
-      setCurrentWeather(weather);
-      setCurrentLocation({ lat, lon });
-      setCurrentCity(`${weather.city}, ${weather.country}`);
+      // Check if we have a saved city
+      const lastCity = weatherService.getLastCity();
+      if (lastCity) {
+        console.log('Loading last searched city:', lastCity);
+        await loadWeatherByCity(lastCity);
+        return;
+      }
+
+      // Check if we have a saved location
+      const lastLocation = weatherService.getLastLocation();
+      if (lastLocation) {
+        console.log('Loading last known location:', lastLocation);
+        await loadWeatherByCoords(lastLocation.lat, lastLocation.lon);
+        setCurrentCity(lastLocation.name);
+        return;
+      }
+
+      // Fallback to Chennai
+      console.log('Falling back to Chennai');
+      await loadWeatherByCity('Chennai');
+
     } catch (error) {
-      console.error('Failed to load weather:', error);
+      console.error('Failed to load initial weather:', error);
       toast({
         title: "Error",
         description: "Failed to load weather data",
         variant: "destructive",
       });
+    } finally {
+      setIsLocationLoading(false);
+    }
+  };
+
+  const loadWeatherByCoords = async (lat: number, lon: number) => {
+    try {
+      const weather = await weatherService.getCurrentWeather(lat, lon);
+      setCurrentWeather(weather);
+      setCurrentLocation({ lat, lon });
+      setCurrentCity(`${weather.city}, ${weather.country}`);
+      console.log('Weather loaded:', weather);
+    } catch (error) {
+      console.error('Failed to load weather by coordinates:', error);
+      throw error;
+    }
+  };
+
+  const loadWeatherByCity = async (cityName: string) => {
+    try {
+      const weather = await weatherService.getWeatherByCity(cityName);
+      setCurrentWeather(weather);
+      // Note: We don't have exact coordinates from city search, 
+      // but we can use approximate ones for other API calls
+      setCurrentLocation({ lat: 0, lon: 0 }); // Will be updated if user uses location
+      setCurrentCity(`${weather.city}, ${weather.country}`);
+      console.log('Weather loaded for city:', weather);
+    } catch (error) {
+      console.error('Failed to load weather by city:', error);
+      throw error;
     }
   };
 
   const handleSearch = async (cityName: string) => {
     try {
-      const location = await weatherService.searchCity(cityName);
-      await loadWeatherData(location.lat, location.lon);
-      setCurrentCity(location.name);
+      setIsLocationLoading(true);
+      await loadWeatherByCity(cityName);
+      toast({
+        title: "Success",
+        description: `Weather updated for ${cityName}`,
+      });
     } catch (error) {
       console.error('Search failed:', error);
       toast({
@@ -72,20 +125,29 @@ const Index = () => {
         description: "City not found",
         variant: "destructive",
       });
+    } finally {
+      setIsLocationLoading(false);
     }
   };
 
   const handleLocationClick = async () => {
     try {
+      setIsLocationLoading(true);
       const location = await weatherService.getCurrentLocation();
-      await loadWeatherData(location.lat, location.lon);
+      await loadWeatherByCoords(location.lat, location.lon);
+      toast({
+        title: "Success",
+        description: "Location updated",
+      });
     } catch (error) {
       console.error('Location access failed:', error);
       toast({
         title: "Error",
-        description: "Failed to access location",
+        description: "Failed to access location. Please enable location services.",
         variant: "destructive",
       });
+    } finally {
+      setIsLocationLoading(false);
     }
   };
 
@@ -108,9 +170,9 @@ const Index = () => {
     <>
       <LoadingScreen isVisible={isLoading} />
       {!isLoading && (
-        <div className={`min-h-screen ${weatherBackground} transition-all duration-1000`}>
+        <div className={`min-h-screen ${background} transition-all duration-1000`}>
           <Header
-            currentCity={currentCity}
+            currentCity={isLocationLoading ? 'Updating...' : currentCity}
             onSearch={handleSearch}
             onLocationClick={handleLocationClick}
           />

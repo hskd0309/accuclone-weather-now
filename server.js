@@ -14,7 +14,28 @@ app.use(express.json());
 // Routes
 app.get('/api/weather', async (req, res) => {
   try {
-    const { lat, lon } = req.query;
+    let lat, lon;
+    
+    // Check if city parameter is provided
+    if (req.query.city) {
+      // First get coordinates for the city
+      const geoResponse = await fetch(
+        `https://api.openweathermap.org/geo/1.0/direct?q=${req.query.city}&limit=1&appid=${API_KEY}`
+      );
+      const geoData = await geoResponse.json();
+      
+      if (geoData.length === 0) {
+        return res.status(404).json({ error: 'City not found' });
+      }
+      
+      lat = geoData[0].lat;
+      lon = geoData[0].lon;
+    } else {
+      // Use provided coordinates
+      lat = req.query.lat;
+      lon = req.query.lon;
+    }
+
     const response = await fetch(
       `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
     );
@@ -32,7 +53,8 @@ app.get('/api/weather', async (req, res) => {
       description: data.weather[0].description,
       icon: data.weather[0].icon,
       city: data.name,
-      country: data.sys.country
+      country: data.sys.country,
+      condition: data.weather[0].main.toLowerCase() // Add condition for theming
     };
     
     res.json(weatherData);
@@ -42,37 +64,53 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 
-app.get('/api/onecall', async (req, res) => {
+// Updated forecast endpoint using free 5-day forecast API
+app.get('/api/forecast', async (req, res) => {
   try {
     const { lat, lon } = req.query;
     const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&exclude=minutely,alerts`
+      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
     );
     const data = await response.json();
     
-    const processedData = {
-      hourly: data.hourly.map(hour => ({
-        time: new Date(hour.dt * 1000).toISOString(),
-        temperature: hour.temp,
-        icon: hour.weather[0].icon,
-        description: hour.weather[0].description,
-        humidity: hour.humidity,
-        windSpeed: hour.wind_speed
-      })),
-      daily: data.daily.map(day => ({
-        date: new Date(day.dt * 1000).toISOString(),
-        minTemp: day.temp.min,
-        maxTemp: day.temp.max,
-        icon: day.weather[0].icon,
-        description: day.weather[0].description,
-        humidity: day.humidity,
-        windSpeed: day.wind_speed
-      }))
-    };
+    // Process hourly data (next 24 hours)
+    const hourly = data.list.slice(0, 8).map(item => ({
+      time: new Date(item.dt * 1000).toISOString(),
+      temperature: item.main.temp,
+      icon: item.weather[0].icon,
+      description: item.weather[0].description,
+      humidity: item.main.humidity,
+      windSpeed: item.wind.speed
+    }));
+
+    // Process daily data (group by day)
+    const dailyMap = new Map();
+    data.list.forEach(item => {
+      const date = new Date(item.dt * 1000).toDateString();
+      if (!dailyMap.has(date)) {
+        dailyMap.set(date, {
+          date: new Date(item.dt * 1000).toISOString(),
+          temps: [item.main.temp],
+          icon: item.weather[0].icon,
+          description: item.weather[0].description,
+          humidity: item.main.humidity,
+          windSpeed: item.wind.speed
+        });
+      } else {
+        dailyMap.get(date).temps.push(item.main.temp);
+      }
+    });
+
+    const daily = Array.from(dailyMap.values()).slice(0, 7).map(day => ({
+      ...day,
+      minTemp: Math.min(...day.temps),
+      maxTemp: Math.max(...day.temps),
+      temps: undefined // Remove temps array
+    }));
     
-    res.json(processedData);
+    res.json({ hourly, daily });
   } catch (error) {
-    console.error('OneCall API error:', error);
+    console.error('Forecast API error:', error);
     res.status(500).json({ error: 'Failed to fetch forecast data' });
   }
 });

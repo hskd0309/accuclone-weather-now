@@ -14,6 +14,7 @@ export interface WeatherData {
   icon: string;
   city: string;
   country: string;
+  condition: string;
 }
 
 export interface HourlyForecast {
@@ -32,24 +33,41 @@ export interface DailyForecast {
 }
 
 class WeatherService {
+  private readonly LAST_CITY_KEY = 'lastSearchedCity';
+  private readonly LAST_LOCATION_KEY = 'lastKnownLocation';
+
   async getCurrentWeather(lat: number, lon: number): Promise<WeatherData> {
     const response = await fetch(`${API_BASE_URL}/weather?lat=${lat}&lon=${lon}`);
     if (!response.ok) throw new Error('Failed to fetch weather data');
-    return response.json();
+    const data = await response.json();
+    
+    // Save location for future use
+    this.saveLastLocation({ lat, lon, name: `${data.city}, ${data.country}` });
+    return data;
+  }
+
+  async getWeatherByCity(cityName: string): Promise<WeatherData> {
+    const response = await fetch(`${API_BASE_URL}/weather?city=${encodeURIComponent(cityName)}`);
+    if (!response.ok) throw new Error('City not found');
+    const data = await response.json();
+    
+    // Save city for future use
+    this.saveLastCity(cityName);
+    return data;
   }
 
   async getHourlyForecast(lat: number, lon: number): Promise<HourlyForecast[]> {
-    const response = await fetch(`${API_BASE_URL}/onecall?lat=${lat}&lon=${lon}`);
+    const response = await fetch(`${API_BASE_URL}/forecast?lat=${lat}&lon=${lon}`);
     if (!response.ok) throw new Error('Failed to fetch hourly forecast');
     const data = await response.json();
-    return data.hourly.slice(0, 24);
+    return data.hourly || [];
   }
 
   async getDailyForecast(lat: number, lon: number): Promise<DailyForecast[]> {
-    const response = await fetch(`${API_BASE_URL}/onecall?lat=${lat}&lon=${lon}`);
+    const response = await fetch(`${API_BASE_URL}/forecast?lat=${lat}&lon=${lon}`);
     if (!response.ok) throw new Error('Failed to fetch daily forecast');
     const data = await response.json();
-    return data.daily.slice(0, 7);
+    return data.daily || [];
   }
 
   async searchCity(cityName: string): Promise<{lat: number, lon: number, name: string}> {
@@ -74,9 +92,37 @@ class WeatherService {
         },
         (error) => {
           reject(new Error('Failed to get location'));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
         }
       );
     });
+  }
+
+  // LocalStorage methods
+  saveLastCity(cityName: string): void {
+    localStorage.setItem(this.LAST_CITY_KEY, cityName);
+  }
+
+  getLastCity(): string | null {
+    return localStorage.getItem(this.LAST_CITY_KEY);
+  }
+
+  saveLastLocation(location: {lat: number, lon: number, name: string}): void {
+    localStorage.setItem(this.LAST_LOCATION_KEY, JSON.stringify(location));
+  }
+
+  getLastLocation(): {lat: number, lon: number, name: string} | null {
+    const stored = localStorage.getItem(this.LAST_LOCATION_KEY);
+    return stored ? JSON.parse(stored) : null;
+  }
+
+  clearStorage(): void {
+    localStorage.removeItem(this.LAST_CITY_KEY);
+    localStorage.removeItem(this.LAST_LOCATION_KEY);
   }
 }
 
