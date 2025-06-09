@@ -21,22 +21,31 @@ const HourlyWeatherPage = () => {
 
   const loadInitialData = async () => {
     try {
-      const coords = weatherService.getCurrentCoordinates();
-      if (coords) {
-        setCurrentLocation(coords);
-        // Load current weather for theming
-        const weather = await weatherService.getCurrentWeather(coords.lat, coords.lon);
+      // Try to get user's current location first
+      try {
+        const location = await weatherService.getCurrentLocation();
+        const weather = await weatherService.getCurrentWeather(location.lat, location.lon);
         setCurrentWeather(weather);
+        setCurrentLocation({ lat: weather.lat, lon: weather.lon });
         setCurrentCity(`${weather.city}, ${weather.country}`);
-      } else {
-        const lastLocation = weatherService.getLastLocation();
-        if (lastLocation) {
-          setCurrentLocation({ lat: lastLocation.lat, lon: lastLocation.lon });
-          setCurrentCity(lastLocation.name);
-        }
+        return;
+      } catch (locationError) {
+        console.log('Location access failed, using fallback');
       }
+
+      // Fallback to last searched city or Chennai
+      const lastCity = weatherService.getLastCity() || 'Chennai';
+      const weather = await weatherService.getWeatherByCity(lastCity);
+      setCurrentWeather(weather);
+      setCurrentLocation({ lat: weather.lat, lon: weather.lon });
+      setCurrentCity(`${weather.city}, ${weather.country}`);
     } catch (error) {
       console.error('Failed to load initial data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load weather data",
+        variant: "destructive",
+      });
     }
   };
 
@@ -45,9 +54,7 @@ const HourlyWeatherPage = () => {
       setIsLocationLoading(true);
       const weather = await weatherService.getWeatherByCity(cityName);
       setCurrentWeather(weather);
-      if (weather.lat && weather.lon) {
-        setCurrentLocation({ lat: weather.lat, lon: weather.lon });
-      }
+      setCurrentLocation({ lat: weather.lat, lon: weather.lon });
       setCurrentCity(`${weather.city}, ${weather.country}`);
       toast({
         title: "Success",
@@ -98,38 +105,30 @@ const HourlyWeatherPage = () => {
       />
       <Navigation />
       <main className="max-w-7xl mx-auto p-4">
-        <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6 animate-fade-in">
-          <HourlyForecast location={currentLocation} />
-          
-          {/* Add engaging visual elements */}
-          <div className="mt-8 text-center">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg p-6 animate-scale-in">
-                <div className="text-2xl mb-2">🌅</div>
-                <h3 className="font-semibold text-gray-800">Morning</h3>
-                <p className="text-sm text-gray-600">Best time for outdoor activities</p>
-              </div>
-              
-              <div className="bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-lg p-6 animate-scale-in animation-delay-150">
-                <div className="text-2xl mb-2">☀️</div>
-                <h3 className="font-semibold text-gray-800">Afternoon</h3>
-                <p className="text-sm text-gray-600">Peak temperature hours</p>
-              </div>
-              
-              <div className="bg-gradient-to-br from-purple-100 to-purple-200 rounded-lg p-6 animate-scale-in animation-delay-300">
-                <div className="text-2xl mb-2">🌙</div>
-                <h3 className="font-semibold text-gray-800">Evening</h3>
-                <p className="text-sm text-gray-600">Cool and comfortable</p>
-              </div>
+        <HourlyForecast 
+          location={currentLocation} 
+          city={currentWeather ? `${currentWeather.city}, ${currentWeather.country}` : undefined}
+        />
+        
+        {/* Add engaging visual elements */}
+        <div className="mt-8 text-center">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg p-6 animate-scale-in glass-effect">
+              <div className="text-3xl mb-2">🌅</div>
+              <h3 className="font-semibold text-gray-800">Morning Hours</h3>
+              <p className="text-sm text-gray-600">Perfect for planning your day</p>
             </div>
-          </div>
-          
-          {/* Animated loading dots */}
-          <div className="flex justify-center mt-8">
-            <div className="flex space-x-2">
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse animation-delay-150"></div>
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse animation-delay-300"></div>
+            
+            <div className="bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-lg p-6 animate-scale-in animation-delay-150 glass-effect">
+              <div className="text-3xl mb-2">☀️</div>
+              <h3 className="font-semibold text-gray-800">Peak Hours</h3>
+              <p className="text-sm text-gray-600">Highest temperature period</p>
+            </div>
+            
+            <div className="bg-gradient-to-br from-purple-100 to-purple-200 rounded-lg p-6 animate-scale-in animation-delay-300 glass-effect">
+              <div className="text-3xl mb-2">🌙</div>
+              <h3 className="font-semibold text-gray-800">Evening Hours</h3>
+              <p className="text-sm text-gray-600">Cool and comfortable weather</p>
             </div>
           </div>
         </div>

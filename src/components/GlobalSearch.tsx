@@ -1,46 +1,31 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, X, Clock, Globe } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { Search, MapPin, Clock, X } from 'lucide-react';
 import { weatherService, CityData } from '@/services/weatherService';
 
 interface GlobalSearchProps {
-  onSearch: (city: string) => void;
-  onLocationClick: () => void;
+  onSearch: (cityName: string) => void;
   placeholder?: string;
   className?: string;
 }
 
 const GlobalSearch: React.FC<GlobalSearchProps> = ({ 
   onSearch, 
-  onLocationClick, 
-  placeholder = "Search city...",
-  className = ""
+  placeholder = "Search for a city...",
+  className = "" 
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<CityData[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [worldCities, setWorldCities] = useState<CityData[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Load recent searches and world cities
-    const stored = localStorage.getItem('recentWeatherSearches');
-    if (stored) {
-      setRecentSearches(JSON.parse(stored));
-    }
-    
-    loadWorldCities();
-  }, []);
-
-  useEffect(() => {
-    // Close suggestions when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
+        setIsOpen(false);
       }
     };
 
@@ -48,159 +33,172 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const loadWorldCities = async () => {
-    try {
-      const cities = await weatherService.getWorldCities();
-      setWorldCities(cities);
-    } catch (error) {
-      console.error('Failed to load world cities:', error);
-    }
-  };
+  useEffect(() => {
+    setRecentSearches(weatherService.getRecentSearches());
+  }, []);
 
   useEffect(() => {
-    if (searchQuery.length > 0) {
-      const filtered = worldCities
-        .filter(city => 
-          city.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          city.country.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-        .slice(0, 8);
-      setSuggestions(filtered);
-    } else {
-      setSuggestions([]);
-    }
-  }, [searchQuery, worldCities]);
+    const searchCities = async () => {
+      if (query.trim().length < 2) {
+        if (query.length === 0) {
+          // Show popular cities when input is empty
+          const popular = await weatherService.getPopularCities();
+          setSuggestions(popular);
+        } else {
+          setSuggestions([]);
+        }
+        setIsLoading(false);
+        return;
+      }
 
-  const handleSearch = (e: React.FormEvent) => {
+      setIsLoading(true);
+      try {
+        const results = await weatherService.searchCities(query);
+        setSuggestions(results);
+      } catch (error) {
+        console.error('Search failed:', error);
+        setSuggestions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchCities, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [query]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value);
+    setIsOpen(true);
+  };
+
+  const handleInputFocus = async () => {
+    setIsOpen(true);
+    if (query.length === 0) {
+      const popular = await weatherService.getPopularCities();
+      setSuggestions(popular);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion: CityData | string) => {
+    const cityName = typeof suggestion === 'string' ? suggestion : suggestion.name;
+    setQuery(cityName);
+    setIsOpen(false);
+    onSearch(cityName);
+    setRecentSearches(weatherService.getRecentSearches());
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      handleSuggestionSelect(searchQuery.trim());
+    if (query.trim()) {
+      onSearch(query.trim());
+      setIsOpen(false);
+      setRecentSearches(weatherService.getRecentSearches());
     }
   };
 
-  const handleSuggestionSelect = (city: string) => {
-    setLoading(true);
-    
-    // Save to recent searches
-    const updated = [city, ...recentSearches.filter(c => c !== city)].slice(0, 5);
+  const clearQuery = () => {
+    setQuery('');
+    setIsOpen(false);
+    inputRef.current?.focus();
+  };
+
+  const removeFromRecent = (cityName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = recentSearches.filter(city => city !== cityName);
+    localStorage.setItem('recentSearches', JSON.stringify(updated));
     setRecentSearches(updated);
-    localStorage.setItem('recentWeatherSearches', JSON.stringify(updated));
-    
-    onSearch(city);
-    setSearchQuery('');
-    setShowSuggestions(false);
-    setLoading(false);
   };
-
-  const clearSearch = () => {
-    setSearchQuery('');
-    setShowSuggestions(false);
-  };
-
-  const handleInputFocus = () => {
-    setShowSuggestions(true);
-  };
-
-  const showRecent = searchQuery.length === 0 && recentSearches.length > 0;
-  const showWorldCities = searchQuery.length === 0 && worldCities.length > 0;
 
   return (
-    <div className={`relative ${className}`} ref={searchRef}>
-      <form onSubmit={handleSearch} className="flex items-center space-x-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <Input
+    <div ref={searchRef} className={`relative ${className}`}>
+      <form onSubmit={handleSubmit} className="relative">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <input
+            ref={inputRef}
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={query}
+            onChange={handleInputChange}
             onFocus={handleInputFocus}
             placeholder={placeholder}
-            className="pl-10 pr-10 bg-white/90 backdrop-blur-sm"
-            disabled={loading}
+            className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/90 backdrop-blur-sm"
           />
-          {searchQuery && (
+          {query && (
             <button
               type="button"
-              onClick={clearSearch}
+              onClick={clearQuery}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           )}
         </div>
-        <Button
-          type="button"
-          onClick={onLocationClick}
-          variant="outline"
-          size="sm"
-          title="Use current location"
-          className="flex-shrink-0 bg-white/90 backdrop-blur-sm"
-          disabled={loading}
-        >
-          <MapPin className="w-4 h-4" />
-        </Button>
       </form>
-      
-      {showSuggestions && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto animate-fade-in">
-          {showRecent && (
-            <div className="p-3 border-b border-gray-100">
-              <div className="flex items-center text-xs text-gray-500 mb-2 px-1">
-                <Clock className="w-3 h-3 mr-1" />
-                Recent searches
-              </div>
-              {recentSearches.map((city, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSuggestionSelect(city)}
-                  className="w-full text-left px-3 py-2 hover:bg-blue-50 rounded flex items-center transition-colors"
-                >
-                  <MapPin className="w-4 h-4 text-gray-400 mr-2" />
-                  <span className="font-medium">{city}</span>
-                </button>
-              ))}
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-80 overflow-y-auto z-50 animate-scale-in">
+          {isLoading && (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
             </div>
           )}
-          
-          {suggestions.length > 0 ? (
-            <div className="p-3">
-              <div className="flex items-center text-xs text-gray-500 mb-2 px-1">
-                <Globe className="w-3 h-3 mr-1" />
-                Search results
-              </div>
-              {suggestions.map((city, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSuggestionSelect(`${city.name}, ${city.country}`)}
-                  className="w-full text-left px-3 py-2 hover:bg-blue-50 rounded flex items-center justify-between transition-colors"
-                >
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 text-gray-400 mr-2" />
-                    <span className="font-medium">{city.name}</span>
+
+          {!isLoading && query.length === 0 && recentSearches.length > 0 && (
+            <div className="p-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                <Clock className="h-4 w-4 mr-1" />
+                Recent Searches
+              </h3>
+              <div className="space-y-1">
+                {recentSearches.map((city, index) => (
+                  <div
+                    key={index}
+                    onClick={() => handleSuggestionClick(city)}
+                    className="flex items-center justify-between p-2 hover:bg-gray-50 rounded cursor-pointer group"
+                  >
+                    <span className="text-gray-700">{city}</span>
+                    <button
+                      onClick={(e) => removeFromRecent(city, e)}
+                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
                   </div>
-                  <span className="text-sm text-gray-500">{city.country}</span>
-                </button>
-              ))}
+                ))}
+              </div>
             </div>
-          ) : showWorldCities && (
+          )}
+
+          {!isLoading && suggestions.length > 0 && (
             <div className="p-3">
-              <div className="flex items-center text-xs text-gray-500 mb-2 px-1">
-                <Globe className="w-3 h-3 mr-1" />
-                Popular cities
-              </div>
-              {worldCities.slice(0, 10).map((city, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSuggestionSelect(`${city.name}, ${city.country}`)}
-                  className="w-full text-left px-3 py-2 hover:bg-blue-50 rounded flex items-center justify-between transition-colors"
-                >
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 text-gray-400 mr-2" />
-                    <span className="font-medium">{city.name}</span>
+              <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                <MapPin className="h-4 w-4 mr-1" />
+                {query.length === 0 ? 'Popular Cities' : 'Search Results'}
+              </h3>
+              <div className="space-y-1">
+                {suggestions.map((suggestion, index) => (
+                  <div
+                    key={index}
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer group"
+                  >
+                    <MapPin className="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">{suggestion.name}</div>
+                      <div className="text-sm text-gray-500">
+                        {suggestion.region && `${suggestion.region}, `}{suggestion.country}
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-sm text-gray-500">{city.country}</span>
-                </button>
-              ))}
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!isLoading && query.length >= 2 && suggestions.length === 0 && (
+            <div className="p-4 text-center text-gray-500">
+              No cities found for "{query}"
             </div>
           )}
         </div>

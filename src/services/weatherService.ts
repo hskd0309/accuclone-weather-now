@@ -1,3 +1,4 @@
+
 const API_BASE_URL = 'http://localhost:3001/api';
 
 export interface WeatherData {
@@ -6,16 +7,30 @@ export interface WeatherData {
   humidity: number;
   windSpeed: number;
   windDirection: number;
+  windDir: string;
   uvIndex: number;
   visibility: number;
   pressure: number;
+  dewPoint: number;
   description: string;
   icon: string;
   city: string;
   country: string;
+  region: string;
   condition: string;
-  lat?: number;
-  lon?: number;
+  lat: number;
+  lon: number;
+  localtime: string;
+  aqi?: {
+    co: number;
+    no2: number;
+    o3: number;
+    so2: number;
+    pm2_5: number;
+    pm10: number;
+    us_epa_index: number;
+    gb_defra_index: number;
+  };
 }
 
 export interface HourlyForecast {
@@ -25,6 +40,8 @@ export interface HourlyForecast {
   description: string;
   humidity: number;
   windSpeed: number;
+  chanceOfRain: number;
+  feelsLike: number;
 }
 
 export interface DailyForecast {
@@ -35,19 +52,37 @@ export interface DailyForecast {
   description: string;
   humidity: number;
   windSpeed: number;
+  chanceOfRain: number;
+  sunrise: string;
+  sunset: string;
+  moonrise: string;
+  moonset: string;
+  moonPhase: string;
+  uvIndex: number;
 }
 
 export interface CityData {
   name: string;
   country: string;
-  state?: string;
+  region?: string;
   lat: number;
   lon: number;
+  url?: string;
+}
+
+export interface AstronomyData {
+  sunrise: string;
+  sunset: string;
+  moonrise: string;
+  moonset: string;
+  moonPhase: string;
+  moonIllumination: string;
 }
 
 class WeatherService {
   private readonly LAST_CITY_KEY = 'lastSearchedCity';
   private readonly LAST_LOCATION_KEY = 'lastKnownLocation';
+  private readonly RECENT_SEARCHES_KEY = 'recentSearches';
   private currentCoordinates: { lat: number; lon: number } | null = null;
 
   async getCurrentWeather(lat: number, lon: number): Promise<WeatherData> {
@@ -55,10 +90,7 @@ class WeatherService {
     if (!response.ok) throw new Error('Failed to fetch weather data');
     const data = await response.json();
     
-    // Store coordinates for other API calls
     this.currentCoordinates = { lat, lon };
-    data.lat = lat;
-    data.lon = lon;
     
     // Save location for future use
     this.saveLastLocation({ lat, lon, name: `${data.city}, ${data.country}` });
@@ -70,76 +102,74 @@ class WeatherService {
     if (!response.ok) throw new Error('City not found');
     const data = await response.json();
     
-    // Get coordinates for this city
-    try {
-      const cityData = await this.searchCity(cityName);
-      this.currentCoordinates = { lat: cityData.lat, lon: cityData.lon };
-      data.lat = cityData.lat;
-      data.lon = cityData.lon;
-    } catch (error) {
-      console.warn('Could not get coordinates for city:', error);
-    }
+    this.currentCoordinates = { lat: data.lat, lon: data.lon };
     
     // Save city for future use
     this.saveLastCity(cityName);
+    this.addToRecentSearches(cityName);
     return data;
   }
 
-  async getHourlyForecast(lat?: number, lon?: number): Promise<HourlyForecast[]> {
-    const coords = this.getCoordinates(lat, lon);
-    const response = await fetch(`${API_BASE_URL}/onecall?lat=${coords.lat}&lon=${coords.lon}`);
+  async getHourlyForecast(lat?: number, lon?: number, city?: string): Promise<HourlyForecast[]> {
+    let url = `${API_BASE_URL}/forecast`;
+    if (city) {
+      url += `?city=${encodeURIComponent(city)}`;
+    } else if (lat && lon) {
+      url += `?lat=${lat}&lon=${lon}`;
+    } else if (this.currentCoordinates) {
+      url += `?lat=${this.currentCoordinates.lat}&lon=${this.currentCoordinates.lon}`;
+    } else {
+      throw new Error('No location specified');
+    }
+    
+    const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch hourly forecast');
     const data = await response.json();
     return data.hourly || [];
   }
 
-  async getDailyForecast(lat?: number, lon?: number): Promise<DailyForecast[]> {
-    const coords = this.getCoordinates(lat, lon);
-    const response = await fetch(`${API_BASE_URL}/onecall?lat=${coords.lat}&lon=${coords.lon}`);
+  async getDailyForecast(lat?: number, lon?: number, city?: string): Promise<DailyForecast[]> {
+    let url = `${API_BASE_URL}/forecast`;
+    if (city) {
+      url += `?city=${encodeURIComponent(city)}`;
+    } else if (lat && lon) {
+      url += `?lat=${lat}&lon=${lon}`;
+    } else if (this.currentCoordinates) {
+      url += `?lat=${this.currentCoordinates.lat}&lon=${this.currentCoordinates.lon}`;
+    } else {
+      throw new Error('No location specified');
+    }
+    
+    const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch daily forecast');
     const data = await response.json();
     return data.daily || [];
   }
 
-  private getCoordinates(lat?: number, lon?: number): { lat: number; lon: number } {
-    if (lat && lon) return { lat, lon };
-    if (this.currentCoordinates) return this.currentCoordinates;
-    throw new Error('No coordinates available');
-  }
-
-  async searchCity(cityName: string): Promise<CityData> {
-    const response = await fetch(`${API_BASE_URL}/city?city=${encodeURIComponent(cityName)}`);
-    if (!response.ok) throw new Error('City not found');
+  async searchCities(query: string): Promise<CityData[]> {
+    if (query.trim().length < 2) return [];
+    
+    const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
+    if (!response.ok) throw new Error('Search failed');
     const data = await response.json();
-    return {
-      name: data.name.split(',')[0],
-      country: data.name.split(',')[1]?.trim() || '',
-      lat: data.lat,
-      lon: data.lon
-    };
+    return data;
   }
 
-  async getWorldCities(): Promise<CityData[]> {
-    // Popular world cities for suggestions
-    const cities = [
-      'New York, US', 'London, GB', 'Tokyo, JP', 'Paris, FR', 'Sydney, AU',
-      'Mumbai, IN', 'Berlin, DE', 'Toronto, CA', 'Moscow, RU', 'Beijing, CN',
-      'Los Angeles, US', 'Chicago, US', 'Miami, US', 'Barcelona, ES', 'Amsterdam, NL',
-      'Rome, IT', 'Dubai, AE', 'Singapore, SG', 'Hong Kong, HK', 'Seoul, KR',
-      'Bangkok, TH', 'Istanbul, TR', 'Cairo, EG', 'São Paulo, BR', 'Mexico City, MX',
-      'Buenos Aires, AR', 'Lagos, NG', 'Johannesburg, ZA', 'Chennai, IN', 'Delhi, IN',
-      'Bangalore, IN', 'Kolkata, IN', 'Hyderabad, IN', 'Pune, IN', 'Ahmedabad, IN'
-    ];
-
-    return cities.map(city => {
-      const [name, country] = city.split(', ');
-      return {
-        name,
-        country,
-        lat: 0, // Will be fetched when selected
-        lon: 0
-      };
-    });
+  async getAstronomyData(lat?: number, lon?: number, city?: string): Promise<AstronomyData> {
+    let url = `${API_BASE_URL}/astronomy`;
+    if (city) {
+      url += `?city=${encodeURIComponent(city)}`;
+    } else if (lat && lon) {
+      url += `?lat=${lat}&lon=${lon}`;
+    } else if (this.currentCoordinates) {
+      url += `?lat=${this.currentCoordinates.lat}&lon=${this.currentCoordinates.lon}`;
+    } else {
+      throw new Error('No location specified');
+    }
+    
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Failed to fetch astronomy data');
+    return response.json();
   }
 
   async getCurrentLocation(): Promise<{lat: number, lon: number}> {
@@ -174,6 +204,22 @@ class WeatherService {
     return this.currentCoordinates;
   }
 
+  // Popular world cities for initial suggestions
+  async getPopularCities(): Promise<CityData[]> {
+    return [
+      { name: 'New York', country: 'United States', region: 'New York', lat: 40.7128, lon: -74.0060 },
+      { name: 'London', country: 'United Kingdom', region: 'England', lat: 51.5074, lon: -0.1278 },
+      { name: 'Tokyo', country: 'Japan', region: 'Tokyo', lat: 35.6762, lon: 139.6503 },
+      { name: 'Paris', country: 'France', region: 'Ile-de-France', lat: 48.8566, lon: 2.3522 },
+      { name: 'Sydney', country: 'Australia', region: 'New South Wales', lat: -33.8688, lon: 151.2093 },
+      { name: 'Mumbai', country: 'India', region: 'Maharashtra', lat: 19.0760, lon: 72.8777 },
+      { name: 'Dubai', country: 'United Arab Emirates', region: 'Dubai', lat: 25.2048, lon: 55.2708 },
+      { name: 'Singapore', country: 'Singapore', region: 'Singapore', lat: 1.3521, lon: 103.8198 },
+      { name: 'Chennai', country: 'India', region: 'Tamil Nadu', lat: 13.0827, lon: 80.2707 },
+      { name: 'Los Angeles', country: 'United States', region: 'California', lat: 34.0522, lon: -118.2437 }
+    ];
+  }
+
   // LocalStorage methods
   saveLastCity(cityName: string): void {
     localStorage.setItem(this.LAST_CITY_KEY, cityName);
@@ -192,9 +238,21 @@ class WeatherService {
     return stored ? JSON.parse(stored) : null;
   }
 
+  addToRecentSearches(cityName: string): void {
+    const recent = this.getRecentSearches();
+    const updated = [cityName, ...recent.filter(city => city !== cityName)].slice(0, 5);
+    localStorage.setItem(this.RECENT_SEARCHES_KEY, JSON.stringify(updated));
+  }
+
+  getRecentSearches(): string[] {
+    const stored = localStorage.getItem(this.RECENT_SEARCHES_KEY);
+    return stored ? JSON.parse(stored) : [];
+  }
+
   clearStorage(): void {
     localStorage.removeItem(this.LAST_CITY_KEY);
     localStorage.removeItem(this.LAST_LOCATION_KEY);
+    localStorage.removeItem(this.RECENT_SEARCHES_KEY);
   }
 }
 

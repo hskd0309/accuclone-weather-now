@@ -1,11 +1,11 @@
-
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const API_KEY = 'd650384a416e774338206719b4f903b3';
+const WEATHER_API_KEY = '9fa9c53c0ac54f09b35163914250906';
+const WEATHER_API_BASE = 'https://api.weatherapi.com/v1';
 
 // Middleware
 app.use(cors());
@@ -20,86 +20,82 @@ app.get('/api/health', (req, res) => {
 app.get('/api/validate-key', async (req, res) => {
   try {
     const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?q=London&appid=${API_KEY}`
+      `${WEATHER_API_BASE}/current.json?key=${WEATHER_API_KEY}&q=London&aqi=yes`
     );
     const data = await response.json();
     
     if (response.ok) {
-      res.json({ valid: true, message: 'API key is working' });
+      res.json({ valid: true, message: 'WeatherAPI key is working' });
     } else {
-      res.status(401).json({ valid: false, error: data.message });
+      res.status(401).json({ valid: false, error: data.error?.message || 'API key invalid' });
     }
   } catch (error) {
     res.status(500).json({ valid: false, error: 'Failed to validate API key' });
   }
 });
 
-// Routes
+// Current weather endpoint
 app.get('/api/weather', async (req, res) => {
   try {
-    let lat, lon;
+    let query;
     
-    // Check if city parameter is provided
     if (req.query.city) {
-      // First get coordinates for the city
-      const geoResponse = await fetch(
-        `https://api.openweathermap.org/geo/1.0/direct?q=${req.query.city}&limit=1&appid=${API_KEY}`
-      );
-      
-      if (!geoResponse.ok) {
-        const geoError = await geoResponse.json();
-        console.error('Geocoding API error:', geoError);
-        return res.status(geoResponse.status).json({ error: geoError.message || 'Geocoding failed' });
-      }
-      
-      const geoData = await geoResponse.json();
-      
-      if (!geoData || geoData.length === 0) {
-        return res.status(404).json({ error: 'City not found' });
-      }
-      
-      lat = geoData[0].lat;
-      lon = geoData[0].lon;
+      query = req.query.city;
+    } else if (req.query.lat && req.query.lon) {
+      query = `${req.query.lat},${req.query.lon}`;
     } else {
-      // Use provided coordinates
-      lat = req.query.lat;
-      lon = req.query.lon;
-    }
-
-    if (!lat || !lon) {
-      return res.status(400).json({ error: 'Latitude and longitude are required' });
+      return res.status(400).json({ error: 'City name or coordinates are required' });
     }
 
     const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
+      `${WEATHER_API_BASE}/current.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(query)}&aqi=yes`
     );
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Weather API error:', errorData);
-      return res.status(response.status).json({ error: errorData.message || 'Weather API call failed' });
+      console.error('WeatherAPI error:', errorData);
+      return res.status(response.status).json({ 
+        error: errorData.error?.message || 'Weather API call failed' 
+      });
     }
     
     const data = await response.json();
     
-    if (!data || !data.main || !data.weather || !data.weather[0]) {
+    if (!data || !data.current || !data.location) {
       return res.status(500).json({ error: 'Invalid weather data received' });
     }
     
     const weatherData = {
-      temperature: data.main.temp,
-      feelsLike: data.main.feels_like,
-      humidity: data.main.humidity,
-      windSpeed: data.wind?.speed || 0,
-      windDirection: data.wind?.deg || 0,
-      uvIndex: 0, // UV index not available in current weather API
-      visibility: data.visibility || 0,
-      pressure: data.main.pressure,
-      description: data.weather[0].description,
-      icon: data.weather[0].icon,
-      city: data.name,
-      country: data.sys?.country || '',
-      condition: data.weather[0].main.toLowerCase() // Add condition for theming
+      temperature: data.current.temp_c,
+      feelsLike: data.current.feelslike_c,
+      humidity: data.current.humidity,
+      windSpeed: data.current.wind_kph,
+      windDirection: data.current.wind_degree,
+      windDir: data.current.wind_dir,
+      uvIndex: data.current.uv,
+      visibility: data.current.vis_km,
+      pressure: data.current.pressure_mb,
+      dewPoint: data.current.dewpoint_c,
+      description: data.current.condition.text,
+      icon: data.current.condition.icon,
+      city: data.location.name,
+      country: data.location.country,
+      region: data.location.region,
+      condition: data.current.condition.text.toLowerCase(),
+      lat: data.location.lat,
+      lon: data.location.lon,
+      localtime: data.location.localtime,
+      // Air Quality Index
+      aqi: data.current.air_quality ? {
+        co: data.current.air_quality.co,
+        no2: data.current.air_quality.no2,
+        o3: data.current.air_quality.o3,
+        so2: data.current.air_quality.so2,
+        pm2_5: data.current.air_quality.pm2_5,
+        pm10: data.current.air_quality.pm10,
+        us_epa_index: data.current.air_quality['us-epa-index'],
+        gb_defra_index: data.current.air_quality['gb-defra-index']
+      } : null
     };
     
     res.json(weatherData);
@@ -109,294 +105,189 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 
-// Updated forecast endpoint using free 5-day forecast API
+// Forecast endpoint (hourly and daily)
 app.get('/api/forecast', async (req, res) => {
   try {
-    const { lat, lon } = req.query;
+    let query;
     
-    if (!lat || !lon) {
-      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    if (req.query.city) {
+      query = req.query.city;
+    } else if (req.query.lat && req.query.lon) {
+      query = `${req.query.lat},${req.query.lon}`;
+    } else {
+      return res.status(400).json({ error: 'City name or coordinates are required' });
     }
-    
+
     const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
+      `${WEATHER_API_BASE}/forecast.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(query)}&days=10&aqi=yes&alerts=yes`
     );
     
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Forecast API error:', errorData);
-      return res.status(response.status).json({ error: errorData.message || 'Forecast API call failed' });
+      return res.status(response.status).json({ 
+        error: errorData.error?.message || 'Forecast API call failed' 
+      });
     }
     
     const data = await response.json();
     
-    if (!data || !data.list || !Array.isArray(data.list)) {
+    if (!data || !data.forecast || !data.forecast.forecastday) {
       return res.status(500).json({ error: 'Invalid forecast data received' });
     }
     
     // Process hourly data (next 24 hours)
-    const hourly = data.list.slice(0, 8).map(item => ({
-      time: new Date(item.dt * 1000).toISOString(),
-      temperature: item.main?.temp || 0,
-      icon: item.weather?.[0]?.icon || '01d',
-      description: item.weather?.[0]?.description || 'Clear',
-      humidity: item.main?.humidity || 0,
-      windSpeed: item.wind?.speed || 0
-    }));
-
-    // Process daily data (group by day)
-    const dailyMap = new Map();
-    data.list.forEach(item => {
-      const date = new Date(item.dt * 1000).toDateString();
-      if (!dailyMap.has(date)) {
-        dailyMap.set(date, {
-          date: new Date(item.dt * 1000).toISOString(),
-          temps: [item.main?.temp || 0],
-          icon: item.weather?.[0]?.icon || '01d',
-          description: item.weather?.[0]?.description || 'Clear',
-          humidity: item.main?.humidity || 0,
-          windSpeed: item.wind?.speed || 0
-        });
-      } else {
-        dailyMap.get(date).temps.push(item.main?.temp || 0);
-      }
+    const hourly = [];
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    // Get remaining hours from today
+    const todayHours = data.forecast.forecastday[0].hour.slice(currentHour);
+    todayHours.forEach(hour => {
+      hourly.push({
+        time: hour.time,
+        temperature: hour.temp_c,
+        icon: hour.condition.icon,
+        description: hour.condition.text,
+        humidity: hour.humidity,
+        windSpeed: hour.wind_kph,
+        chanceOfRain: hour.chance_of_rain,
+        feelsLike: hour.feelslike_c
+      });
     });
+    
+    // Add hours from tomorrow if needed to reach 24 hours
+    if (hourly.length < 24 && data.forecast.forecastday[1]) {
+      const tomorrowHours = data.forecast.forecastday[1].hour.slice(0, 24 - hourly.length);
+      tomorrowHours.forEach(hour => {
+        hourly.push({
+          time: hour.time,
+          temperature: hour.temp_c,
+          icon: hour.condition.icon,
+          description: hour.condition.text,
+          humidity: hour.humidity,
+          windSpeed: hour.wind_kph,
+          chanceOfRain: hour.chance_of_rain,
+          feelsLike: hour.feelslike_c
+        });
+      });
+    }
 
-    const daily = Array.from(dailyMap.values()).slice(0, 7).map(day => ({
-      ...day,
-      minTemp: Math.min(...day.temps),
-      maxTemp: Math.max(...day.temps),
-      temps: undefined // Remove temps array
+    // Process daily data
+    const daily = data.forecast.forecastday.map(day => ({
+      date: day.date,
+      minTemp: day.day.mintemp_c,
+      maxTemp: day.day.maxtemp_c,
+      icon: day.day.condition.icon,
+      description: day.day.condition.text,
+      humidity: day.day.avghumidity,
+      windSpeed: day.day.maxwind_kph,
+      chanceOfRain: day.day.daily_chance_of_rain,
+      sunrise: day.astro.sunrise,
+      sunset: day.astro.sunset,
+      moonrise: day.astro.moonrise,
+      moonset: day.astro.moonset,
+      moonPhase: day.astro.moon_phase,
+      uvIndex: day.day.uv
     }));
     
-    res.json({ hourly, daily });
+    res.json({ 
+      hourly: hourly.slice(0, 24), 
+      daily,
+      location: {
+        name: data.location.name,
+        country: data.location.country,
+        lat: data.location.lat,
+        lon: data.location.lon
+      }
+    });
   } catch (error) {
     console.error('Forecast API error:', error);
     res.status(500).json({ error: 'Failed to fetch forecast data' });
   }
 });
 
-// Fixed OneCall API endpoint with fallback to free APIs
-app.get('/api/onecall', async (req, res) => {
+// City search/autocomplete endpoint
+app.get('/api/search', async (req, res) => {
   try {
-    const { lat, lon } = req.query;
+    const { q } = req.query;
     
-    if (!lat || !lon) {
-      return res.status(400).json({ error: 'Latitude and longitude are required' });
-    }
-
-    // Try OneCall first, then fallback to forecast API
-    const oneCallUrl = `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`;
-    
-    try {
-      console.log('Attempting OneCall API...');
-      const oneCallResponse = await fetch(oneCallUrl);
-      const oneCallData = await oneCallResponse.json();
-      
-      if (oneCallResponse.ok && oneCallData.hourly && oneCallData.daily) {
-        console.log('OneCall API successful');
-        // Process OneCall data
-        const hourly = oneCallData.hourly.slice(0, 24).map(item => ({
-          time: new Date(item.dt * 1000).toISOString(),
-          temperature: item.temp || 0,
-          icon: item.weather?.[0]?.icon || '01d',
-          description: item.weather?.[0]?.description || 'Clear',
-          humidity: item.humidity || 0,
-          windSpeed: item.wind_speed || 0
-        }));
-
-        const daily = oneCallData.daily.slice(0, 7).map(item => ({
-          date: new Date(item.dt * 1000).toISOString(),
-          minTemp: item.temp?.min || 0,
-          maxTemp: item.temp?.max || 0,
-          icon: item.weather?.[0]?.icon || '01d',
-          description: item.weather?.[0]?.description || 'Clear',
-          humidity: item.humidity || 0,
-          windSpeed: item.wind_speed || 0
-        }));
-
-        return res.json({ hourly, daily });
-      } else {
-        console.log('OneCall API returned invalid data:', oneCallData);
-      }
-    } catch (oneCallError) {
-      console.log('OneCall API not available, falling back to 5-day forecast:', oneCallError.message);
-    }
-
-    // Fallback to forecast API
-    console.log('Using forecast API fallback...');
-    const forecastResponse = await fetch(
-      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
-    );
-    
-    if (!forecastResponse.ok) {
-      const errorData = await forecastResponse.json();
-      console.error('Forecast API error:', errorData);
-      return res.status(forecastResponse.status).json({ error: errorData.message || 'Forecast API call failed' });
-    }
-    
-    const forecastData = await forecastResponse.json();
-    
-    if (!forecastData || !forecastData.list || !Array.isArray(forecastData.list)) {
-      return res.status(500).json({ error: 'Invalid forecast data received' });
-    }
-
-    // Process forecast data into hourly and daily format
-    const hourly = forecastData.list.slice(0, 24).map(item => ({
-      time: new Date(item.dt * 1000).toISOString(),
-      temperature: item.main?.temp || 0,
-      icon: item.weather?.[0]?.icon || '01d',
-      description: item.weather?.[0]?.description || 'Clear',
-      humidity: item.main?.humidity || 0,
-      windSpeed: item.wind?.speed || 0
-    }));
-
-    // Group forecast data by day
-    const dailyMap = new Map();
-    forecastData.list.forEach(item => {
-      const date = new Date(item.dt * 1000).toDateString();
-      if (!dailyMap.has(date)) {
-        dailyMap.set(date, {
-          date: new Date(item.dt * 1000).toISOString(),
-          temps: [item.main?.temp || 0],
-          icon: item.weather?.[0]?.icon || '01d',
-          description: item.weather?.[0]?.description || 'Clear',
-          humidity: item.main?.humidity || 0,
-          windSpeed: item.wind?.speed || 0
-        });
-      } else {
-        dailyMap.get(date).temps.push(item.main?.temp || 0);
-      }
-    });
-
-    const daily = Array.from(dailyMap.values()).slice(0, 7).map(day => ({
-      ...day,
-      minTemp: Math.min(...day.temps),
-      maxTemp: Math.max(...day.temps),
-      temps: undefined
-    }));
-
-    res.json({ hourly, daily });
-  } catch (error) {
-    console.error('OneCall API error:', error);
-    res.status(500).json({ error: 'Failed to fetch OneCall data' });
-  }
-});
-
-app.get('/api/city', async (req, res) => {
-  try {
-    const { city } = req.query;
-    
-    if (!city) {
-      return res.status(400).json({ error: 'City parameter is required' });
+    if (!q) {
+      return res.status(400).json({ error: 'Search query is required' });
     }
     
     const response = await fetch(
-      `https://api.openweathermap.org/geo/1.0/direct?q=${city}&limit=1&appid=${API_KEY}`
+      `${WEATHER_API_BASE}/search.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(q)}`
     );
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Geocoding API error:', errorData);
-      return res.status(response.status).json({ error: errorData.message || 'Geocoding failed' });
+      console.error('Search API error:', errorData);
+      return res.status(response.status).json({ 
+        error: errorData.error?.message || 'Search API call failed' 
+      });
     }
     
     const data = await response.json();
     
-    if (!data || data.length === 0) {
-      return res.status(404).json({ error: 'City not found' });
-    }
+    const cities = data.map(city => ({
+      name: city.name,
+      country: city.country,
+      region: city.region,
+      lat: city.lat,
+      lon: city.lon,
+      url: city.url
+    }));
     
-    const location = {
-      lat: data[0].lat,
-      lon: data[0].lon,
-      name: `${data[0].name}, ${data[0].country}`
-    };
-    
-    res.json(location);
+    res.json(cities);
   } catch (error) {
-    console.error('Geocoding API error:', error);
-    res.status(500).json({ error: 'Failed to search city' });
+    console.error('Search API error:', error);
+    res.status(500).json({ error: 'Failed to search cities' });
   }
 });
 
-// Enhanced historical weather data simulation
-app.get('/api/historical', async (req, res) => {
+// Astronomy data endpoint
+app.get('/api/astronomy', async (req, res) => {
   try {
-    const { lat, lon, days = 7 } = req.query;
+    let query;
     
-    if (!lat || !lon) {
-      return res.status(400).json({ error: 'Latitude and longitude are required' });
+    if (req.query.city) {
+      query = req.query.city;
+    } else if (req.query.lat && req.query.lon) {
+      query = `${req.query.lat},${req.query.lon}`;
+    } else {
+      return res.status(400).json({ error: 'City name or coordinates are required' });
     }
-    
-    // Get current weather for baseline
-    const currentWeather = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
+
+    const response = await fetch(
+      `${WEATHER_API_BASE}/astronomy.json?key=${WEATHER_API_KEY}&q=${encodeURIComponent(query)}`
     );
     
-    if (!currentWeather.ok) {
-      const errorData = await currentWeather.json();
-      console.error('Current weather API error:', errorData);
-      return res.status(currentWeather.status).json({ error: errorData.message || 'Failed to get baseline weather' });
-    }
-    
-    const current = await currentWeather.json();
-    
-    if (!current || !current.main) {
-      return res.status(500).json({ error: 'Invalid current weather data' });
-    }
-    
-    const historicalData = [];
-    const baseTemp = current.main.temp;
-    const baseHumidity = current.main.humidity;
-    const baseWindSpeed = current.wind?.speed || 0;
-    const basePressure = current.main.pressure;
-    
-    const numDays = Math.min(parseInt(days) || 7, 30); // Limit to 30 days max
-    
-    for (let i = numDays; i > 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      
-      // More realistic temperature variations
-      const dailyVariation = Math.sin((date.getHours() / 24) * 2 * Math.PI) * 3; // Daily cycle
-      const randomVariation = (Math.random() - 0.5) * 8; // Random variation
-      const seasonalVariation = Math.sin((date.getMonth() / 12) * 2 * Math.PI) * 10; // Seasonal cycle
-      const weeklyTrend = Math.sin((i / 7) * Math.PI) * 2; // Weekly trend
-      
-      // Apply bounds checking
-      const temperature = Math.max(-30, Math.min(50, 
-        baseTemp + dailyVariation + randomVariation + seasonalVariation + weeklyTrend
-      ));
-      
-      const humidity = Math.max(0, Math.min(100, 
-        baseHumidity + (Math.random() - 0.5) * 30
-      ));
-      
-      const windSpeed = Math.max(0, Math.min(50, 
-        baseWindSpeed + (Math.random() - 0.5) * 10
-      ));
-      
-      const pressure = Math.max(950, Math.min(1050, 
-        basePressure + (Math.random() - 0.5) * 40
-      ));
-      
-      historicalData.push({
-        date: date.toISOString(),
-        temperature: Math.round(temperature * 10) / 10,
-        humidity: Math.round(humidity),
-        windSpeed: Math.round(windSpeed * 10) / 10,
-        pressure: Math.round(pressure)
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Astronomy API error:', errorData);
+      return res.status(response.status).json({ 
+        error: errorData.error?.message || 'Astronomy API call failed' 
       });
     }
     
-    res.json(historicalData);
+    const data = await response.json();
+    
+    res.json({
+      sunrise: data.astronomy.astro.sunrise,
+      sunset: data.astronomy.astro.sunset,
+      moonrise: data.astronomy.astro.moonrise,
+      moonset: data.astronomy.astro.moonset,
+      moonPhase: data.astronomy.astro.moon_phase,
+      moonIllumination: data.astronomy.astro.moon_illumination
+    });
   } catch (error) {
-    console.error('Historical API error:', error);
-    res.status(500).json({ error: 'Failed to fetch historical data' });
+    console.error('Astronomy API error:', error);
+    res.status(500).json({ error: 'Failed to fetch astronomy data' });
   }
 });
 
+// Keep the existing precipitation tile endpoint for the radar map
 app.get('/api/precipitation-tile', (req, res) => {
   const { z, x, y } = req.query;
   
@@ -404,7 +295,8 @@ app.get('/api/precipitation-tile', (req, res) => {
     return res.status(400).json({ error: 'Missing tile parameters (z, x, y)' });
   }
   
-  const tileUrl = `https://tile.openweathermap.org/map/precipitation_new/${z}/${x}/${y}.png?appid=${API_KEY}`;
+  // Using OpenWeatherMap for tiles since WeatherAPI doesn't provide tiles
+  const tileUrl = `https://tile.openweathermap.org/map/precipitation_new/${z}/${x}/${y}.png?appid=d650384a416e774338206719b4f903b3`;
   res.redirect(tileUrl);
 });
 
@@ -421,14 +313,13 @@ app.use((req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Weather API server running on port ${PORT}`);
-  console.log(`Frontend should connect to: http://localhost:${PORT}`);
+  console.log(`Using WeatherAPI.com with key: ${WEATHER_API_KEY.substring(0, 8)}...`);
   console.log('Available endpoints:');
   console.log('  GET /api/health - Health check');
   console.log('  GET /api/validate-key - Validate API key');
   console.log('  GET /api/weather - Current weather');
-  console.log('  GET /api/forecast - 5-day forecast');
-  console.log('  GET /api/onecall - OneCall with fallback');
-  console.log('  GET /api/city - City search');
-  console.log('  GET /api/historical - Historical data');
-  console.log('  GET /api/precipitation-tile - Weather tiles');
+  console.log('  GET /api/forecast - Hourly & daily forecast');
+  console.log('  GET /api/search - City search/autocomplete');
+  console.log('  GET /api/astronomy - Sunrise/sunset data');
+  console.log('  GET /api/precipitation-tile - Weather radar tiles');
 });
