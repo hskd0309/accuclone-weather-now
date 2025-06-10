@@ -154,7 +154,7 @@ const Index = () => {
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'current':
-        return <CurrentWeather weather={currentWeather} />;
+        return <CurrentWeather weather={currentWeather} location={currentLocation} />;
       case 'hourly':
         return <HourlyForecast location={currentLocation} />;
       case 'daily':
@@ -162,7 +162,7 @@ const Index = () => {
       case 'favorites':
         return <Favorites onCitySelect={handleSearch} />;
       default:
-        return <CurrentWeather weather={currentWeather} />;
+        return <CurrentWeather weather={currentWeather} location={currentLocation} />;
     }
   };
 
