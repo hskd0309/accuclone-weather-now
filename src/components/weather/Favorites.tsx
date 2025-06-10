@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Heart, Trash2, Plus, MapPin, Thermometer, Eye, Wind } from 'lucide-react';
 import { weatherService, WeatherData } from '@/services/weatherService';
@@ -99,6 +98,11 @@ const Favorites: React.FC<FavoritesProps> = ({ onCitySelect }) => {
     }
   };
 
+  const handleCityClick = (cityName: string) => {
+    console.log('Selecting favorite city:', cityName);
+    onCitySelect(cityName);
+  };
+
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
@@ -168,7 +172,7 @@ const Favorites: React.FC<FavoritesProps> = ({ onCitySelect }) => {
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <button
-                    onClick={() => onCitySelect(city.name)}
+                    onClick={() => handleCityClick(city.name)}
                     className="text-left w-full group"
                   >
                     <h3 className="font-bold text-lg hover:text-blue-600 transition-colors flex items-center">
@@ -177,6 +181,9 @@ const Favorites: React.FC<FavoritesProps> = ({ onCitySelect }) => {
                     </h3>
                     <p className="text-sm text-gray-500 mt-1">
                       Added {new Date(city.addedAt).toLocaleDateString()}
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      Click to view weather
                     </p>
                   </button>
                 </div>

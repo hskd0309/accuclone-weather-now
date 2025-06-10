@@ -3,9 +3,11 @@ import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import Favorites from '@/components/weather/Favorites';
+import LoadingScreen from '@/components/LoadingScreen';
 import { weatherService, WeatherData } from '@/services/weatherService';
 import { useToast } from '@/hooks/use-toast';
 import { useWeatherTheme } from '@/hooks/useWeatherTheme';
+import { useLoading } from '@/contexts/LoadingContext';
 
 const FavoritesWeatherPage = () => {
   const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null);
@@ -13,6 +15,7 @@ const FavoritesWeatherPage = () => {
   const [isLocationLoading, setIsLocationLoading] = useState(false);
   const { toast } = useToast();
   const { background } = useWeatherTheme(currentWeather);
+  const { isInitialLoading, setInitialLoading } = useLoading();
 
   useEffect(() => {
     loadInitialData();
@@ -23,9 +26,16 @@ const FavoritesWeatherPage = () => {
       const lastLocation = weatherService.getLastLocation();
       if (lastLocation) {
         setCurrentCity(lastLocation.name);
+        const weather = await weatherService.getWeatherByCity(lastLocation.name);
+        setCurrentWeather(weather);
       }
     } catch (error) {
       console.error('Failed to load initial data:', error);
+    } finally {
+      // Set loading to false after a minimum time
+      setTimeout(() => {
+        setInitialLoading(false);
+      }, 2000);
     }
   };
 
@@ -74,30 +84,58 @@ const FavoritesWeatherPage = () => {
     }
   };
 
+  const handleFavoriteSelect = async (cityName: string) => {
+    await handleSearch(cityName);
+  };
+
   return (
-    <div className={`min-h-screen ${background} transition-all duration-1000`}>
-      <Header
-        currentCity={isLocationLoading ? 'Updating...' : currentCity}
-        onSearch={handleSearch}
-        onLocationClick={handleLocationClick}
-      />
-      <Navigation />
-      <main className="max-w-7xl mx-auto p-4">
-        <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6 animate-fade-in">
-          <Favorites onCitySelect={handleSearch} />
-          
-          {/* Add decorative elements */}
-          <div className="mt-8 space-y-6">
-            <div className="text-center">
-              <div className="inline-flex items-center space-x-4 p-6 bg-gradient-to-r from-pink-100 to-purple-100 rounded-lg animate-scale-in">
-                <div className="animate-pulse">⭐</div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">Quick Access</h3>
-                  <p className="text-sm text-gray-600">Save your favorite cities for instant weather updates</p>
+    <>
+      <LoadingScreen isVisible={isInitialLoading} />
+      <div className={`min-h-screen ${background} transition-all duration-1000`}>
+        <Header
+          currentCity={isLocationLoading ? 'Updating...' : currentCity}
+          onSearch={handleSearch}
+          onLocationClick={handleLocationClick}
+        />
+        <Navigation />
+        <main className="max-w-7xl mx-auto p-4">
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6 animate-fade-in">
+            <Favorites onCitySelect={handleFavoriteSelect} />
+            
+            {/* Show current weather info if available */}
+            {currentWeather && (
+              <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg animate-fade-in">
+                <h3 className="text-xl font-semibold mb-4 flex items-center">
+                  🌤️ Current Weather in {currentCity}
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {Math.round(currentWeather.temperature)}°C
+                    </div>
+                    <div className="text-sm text-gray-600">Temperature</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {currentWeather.humidity}%
+                    </div>
+                    <div className="text-sm text-gray-600">Humidity</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-purple-600">
+                      {currentWeather.windSpeed} km/h
+                    </div>
+                    <div className="text-sm text-gray-600">Wind Speed</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-orange-600 capitalize">
+                      {currentWeather.description}
+                    </div>
+                    <div className="text-sm text-gray-600">Condition</div>
+                  </div>
                 </div>
-                <div className="animate-pulse animation-delay-300">❤️</div>
               </div>
-            </div>
+            )}
             
             {/* Animated heart pattern */}
             <div className="flex justify-center space-x-6 py-4">
@@ -107,9 +145,9 @@ const FavoritesWeatherPage = () => {
               <div className="text-blue-400 animate-bounce animation-delay-600">💙</div>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </>
   );
 };
 
