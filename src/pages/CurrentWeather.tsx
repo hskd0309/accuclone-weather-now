@@ -128,7 +128,7 @@ const CurrentWeatherPage = () => {
           <Navigation />
           <main className="max-w-7xl mx-auto p-4">
             <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6 animate-fade-in">
-              <CurrentWeather weather={currentWeather} />
+              <CurrentWeather weather={currentWeather} location={currentLocation} />
               
               {/* Add some visual elements */}
               <div className="mt-8 space-y-6">
