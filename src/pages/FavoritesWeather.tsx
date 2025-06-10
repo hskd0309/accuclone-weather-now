@@ -4,10 +4,12 @@ import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import Favorites from '@/components/weather/Favorites';
 import LoadingScreen from '@/components/LoadingScreen';
+import UserSidebar from '@/components/UserSidebar';
 import { weatherService, WeatherData } from '@/services/weatherService';
 import { useToast } from '@/hooks/use-toast';
 import { useWeatherTheme } from '@/hooks/useWeatherTheme';
 import { useLoading } from '@/contexts/LoadingContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 const FavoritesWeatherPage = () => {
   const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null);
@@ -16,6 +18,7 @@ const FavoritesWeatherPage = () => {
   const { toast } = useToast();
   const { background } = useWeatherTheme(currentWeather);
   const { isInitialLoading, setInitialLoading } = useLoading();
+  const { addCityToHistory } = useAuth();
 
   useEffect(() => {
     loadInitialData();
@@ -45,6 +48,7 @@ const FavoritesWeatherPage = () => {
       const weather = await weatherService.getWeatherByCity(cityName);
       setCurrentWeather(weather);
       setCurrentCity(`${weather.city}, ${weather.country}`);
+      addCityToHistory(weather.city);
       toast({
         title: "Success",
         description: `Weather updated for ${cityName}`,
@@ -68,6 +72,7 @@ const FavoritesWeatherPage = () => {
       const weather = await weatherService.getCurrentWeather(location.lat, location.lon);
       setCurrentWeather(weather);
       setCurrentCity(`${weather.city}, ${weather.country}`);
+      addCityToHistory(weather.city);
       toast({
         title: "Success",
         description: "Location updated",
@@ -92,6 +97,9 @@ const FavoritesWeatherPage = () => {
     <>
       <LoadingScreen isVisible={isInitialLoading} />
       <div className={`min-h-screen ${background} transition-all duration-1000`}>
+        <div className="absolute top-4 right-4 z-50">
+          <UserSidebar />
+        </div>
         <Header
           currentCity={isLocationLoading ? 'Updating...' : currentCity}
           onSearch={handleSearch}

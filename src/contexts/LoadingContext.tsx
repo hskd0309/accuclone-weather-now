@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 interface LoadingContextType {
   isInitialLoading: boolean;
@@ -10,14 +10,14 @@ const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
 
 export const LoadingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isInitialLoading, setIsInitialLoading] = useState(() => {
-    // Check if app has been loaded before
-    return !localStorage.getItem('appLoaded');
+    // Check if app has been loaded before in this session
+    return !sessionStorage.getItem('appLoadedThisSession');
   });
 
   const setInitialLoading = (loading: boolean) => {
     setIsInitialLoading(loading);
     if (!loading) {
-      localStorage.setItem('appLoaded', 'true');
+      sessionStorage.setItem('appLoadedThisSession', 'true');
     }
   };
 
