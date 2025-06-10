@@ -100,7 +100,14 @@ const PrecipitationMapPage = () => {
       />
       <Navigation />
       <main className="max-w-7xl mx-auto p-4">
-        <WeatherMap location={currentWeather ? { lat: currentWeather.lat, lon: currentWeather.lon } : undefined} />
+        {currentWeather && currentWeather.lat && currentWeather.lon ? (
+          <WeatherMap location={{ lat: currentWeather.lat, lon: currentWeather.lon }} />
+        ) : (
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading map location...</p>
+          </div>
+        )}
       </main>
     </div>
   );
