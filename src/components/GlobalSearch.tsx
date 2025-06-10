@@ -84,6 +84,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
     const cityName = typeof suggestion === 'string' ? suggestion : suggestion.name;
     setQuery(cityName);
     setIsOpen(false);
+    
+    // Call the search handler without navigation
     onSearch(cityName);
     setRecentSearches(weatherService.getRecentSearches());
   };
@@ -91,6 +93,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
+      // Just update the location, don't navigate
       onSearch(query.trim());
       setIsOpen(false);
       setRecentSearches(weatherService.getRecentSearches());
