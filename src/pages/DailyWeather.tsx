@@ -1,37 +1,43 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import DailyForecast from '@/components/weather/DailyForecast';
-import { weatherService, WeatherData } from '@/services/weatherService';
+import { weatherService } from '@/services/weatherService';
 import { useToast } from '@/hooks/use-toast';
 import { useWeatherTheme } from '@/hooks/useWeatherTheme';
+import { useLocation } from '@/contexts/LocationContext';
 
 const DailyWeatherPage = () => {
-  const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null);
-  const [currentLocation, setCurrentLocation] = useState({ lat: 0, lon: 0 });
-  const [currentCity, setCurrentCity] = useState('Loading...');
-  const [isLocationLoading, setIsLocationLoading] = useState(false);
   const { toast } = useToast();
+  const { 
+    currentWeather, 
+    currentLocation, 
+    currentCity, 
+    isLocationLoading,
+    updateLocationByCity,
+    updateLocationByCoords 
+  } = useLocation();
   const { background } = useWeatherTheme(currentWeather);
 
   useEffect(() => {
-    loadInitialData();
+    // Initialize location if not already set
+    if (!currentWeather && currentLocation.lat === 0) {
+      loadInitialData();
+    }
   }, []);
 
   const loadInitialData = async () => {
     try {
       const coords = weatherService.getCurrentCoordinates();
       if (coords) {
-        setCurrentLocation(coords);
-        const weather = await weatherService.getCurrentWeather(coords.lat, coords.lon);
-        setCurrentWeather(weather);
-        setCurrentCity(`${weather.city}, ${weather.country}`);
+        await updateLocationByCoords(coords.lat, coords.lon);
       } else {
         const lastLocation = weatherService.getLastLocation();
         if (lastLocation) {
-          setCurrentLocation({ lat: lastLocation.lat, lon: lastLocation.lon });
-          setCurrentCity(lastLocation.name);
+          await updateLocationByCoords(lastLocation.lat, lastLocation.lon);
+        } else {
+          await updateLocationByCity('Chennai');
         }
       }
     } catch (error) {
@@ -41,13 +47,7 @@ const DailyWeatherPage = () => {
 
   const handleSearch = async (cityName: string) => {
     try {
-      setIsLocationLoading(true);
-      const weather = await weatherService.getWeatherByCity(cityName);
-      setCurrentWeather(weather);
-      if (weather.lat && weather.lon) {
-        setCurrentLocation({ lat: weather.lat, lon: weather.lon });
-      }
-      setCurrentCity(`${weather.city}, ${weather.country}`);
+      await updateLocationByCity(cityName);
       toast({
         title: "Success",
         description: `Weather updated for ${cityName}`,
@@ -59,19 +59,13 @@ const DailyWeatherPage = () => {
         description: "City not found",
         variant: "destructive",
       });
-    } finally {
-      setIsLocationLoading(false);
     }
   };
 
   const handleLocationClick = async () => {
     try {
-      setIsLocationLoading(true);
       const location = await weatherService.getCurrentLocation();
-      const weather = await weatherService.getCurrentWeather(location.lat, location.lon);
-      setCurrentWeather(weather);
-      setCurrentLocation(location);
-      setCurrentCity(`${weather.city}, ${weather.country}`);
+      await updateLocationByCoords(location.lat, location.lon);
       toast({
         title: "Success",
         description: "Location updated",
@@ -83,8 +77,6 @@ const DailyWeatherPage = () => {
         description: "Failed to access location. Please enable location services.",
         variant: "destructive",
       });
-    } finally {
-      setIsLocationLoading(false);
     }
   };
 

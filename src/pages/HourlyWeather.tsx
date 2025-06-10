@@ -1,22 +1,30 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import HourlyForecast from '@/components/weather/HourlyForecast';
-import { weatherService, WeatherData } from '@/services/weatherService';
+import { weatherService } from '@/services/weatherService';
 import { useToast } from '@/hooks/use-toast';
 import { useWeatherTheme } from '@/hooks/useWeatherTheme';
+import { useLocation } from '@/contexts/LocationContext';
 
 const HourlyWeatherPage = () => {
-  const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null);
-  const [currentLocation, setCurrentLocation] = useState({ lat: 0, lon: 0 });
-  const [currentCity, setCurrentCity] = useState('Loading...');
-  const [isLocationLoading, setIsLocationLoading] = useState(false);
   const { toast } = useToast();
+  const { 
+    currentWeather, 
+    currentLocation, 
+    currentCity, 
+    isLocationLoading,
+    updateLocationByCity,
+    updateLocationByCoords 
+  } = useLocation();
   const { background } = useWeatherTheme(currentWeather);
 
   useEffect(() => {
-    loadInitialData();
+    // Initialize location if not already set
+    if (!currentWeather && currentLocation.lat === 0) {
+      loadInitialData();
+    }
   }, []);
 
   const loadInitialData = async () => {
@@ -24,10 +32,7 @@ const HourlyWeatherPage = () => {
       // Try to get user's current location first
       try {
         const location = await weatherService.getCurrentLocation();
-        const weather = await weatherService.getCurrentWeather(location.lat, location.lon);
-        setCurrentWeather(weather);
-        setCurrentLocation({ lat: weather.lat, lon: weather.lon });
-        setCurrentCity(`${weather.city}, ${weather.country}`);
+        await updateLocationByCoords(location.lat, location.lon);
         return;
       } catch (locationError) {
         console.log('Location access failed, using fallback');
@@ -35,10 +40,7 @@ const HourlyWeatherPage = () => {
 
       // Fallback to last searched city or Chennai
       const lastCity = weatherService.getLastCity() || 'Chennai';
-      const weather = await weatherService.getWeatherByCity(lastCity);
-      setCurrentWeather(weather);
-      setCurrentLocation({ lat: weather.lat, lon: weather.lon });
-      setCurrentCity(`${weather.city}, ${weather.country}`);
+      await updateLocationByCity(lastCity);
     } catch (error) {
       console.error('Failed to load initial data:', error);
       toast({
@@ -51,11 +53,7 @@ const HourlyWeatherPage = () => {
 
   const handleSearch = async (cityName: string) => {
     try {
-      setIsLocationLoading(true);
-      const weather = await weatherService.getWeatherByCity(cityName);
-      setCurrentWeather(weather);
-      setCurrentLocation({ lat: weather.lat, lon: weather.lon });
-      setCurrentCity(`${weather.city}, ${weather.country}`);
+      await updateLocationByCity(cityName);
       toast({
         title: "Success",
         description: `Weather updated for ${cityName}`,
@@ -67,19 +65,13 @@ const HourlyWeatherPage = () => {
         description: "City not found",
         variant: "destructive",
       });
-    } finally {
-      setIsLocationLoading(false);
     }
   };
 
   const handleLocationClick = async () => {
     try {
-      setIsLocationLoading(true);
       const location = await weatherService.getCurrentLocation();
-      const weather = await weatherService.getCurrentWeather(location.lat, location.lon);
-      setCurrentWeather(weather);
-      setCurrentLocation(location);
-      setCurrentCity(`${weather.city}, ${weather.country}`);
+      await updateLocationByCoords(location.lat, location.lon);
       toast({
         title: "Success",
         description: "Location updated",
@@ -91,8 +83,6 @@ const HourlyWeatherPage = () => {
         description: "Failed to access location. Please enable location services.",
         variant: "destructive",
       });
-    } finally {
-      setIsLocationLoading(false);
     }
   };
 
