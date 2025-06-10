@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import LoadingScreen from '@/components/LoadingScreen';
@@ -12,7 +11,10 @@ import { useWeatherTheme } from '@/hooks/useWeatherTheme';
 
 const CurrentWeatherPage = () => {
   const [searchParams] = useSearchParams();
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    // Check if loading screen has been shown in this session
+    return !sessionStorage.getItem('weatherAppLoaded');
+  });
   const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null);
   const [currentLocation, setCurrentLocation] = useState({ lat: 0, lon: 0 });
   const [currentCity, setCurrentCity] = useState('Loading...');
@@ -21,12 +23,19 @@ const CurrentWeatherPage = () => {
   const { background } = useWeatherTheme(currentWeather);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-      loadInitialWeather();
-    }, 2000);
+    if (isLoading) {
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+        // Mark that loading screen has been shown
+        sessionStorage.setItem('weatherAppLoaded', 'true');
+        loadInitialWeather();
+      }, 2000);
 
-    return () => clearTimeout(timer);
+      return () => clearTimeout(timer);
+    } else {
+      // If not showing loading screen, load weather immediately
+      loadInitialWeather();
+    }
   }, []);
 
   const loadInitialWeather = async () => {
