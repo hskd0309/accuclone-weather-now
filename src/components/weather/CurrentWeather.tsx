@@ -5,22 +5,21 @@ import { Wind, Droplets, Eye, Gauge, Sun, Thermometer, Sunrise, Sunset, Moon } f
 
 interface CurrentWeatherProps {
   weather: WeatherData | null;
+  location: { lat: number; lon: number };
 }
 
-const CurrentWeather: React.FC<CurrentWeatherProps> = ({ weather }) => {
+const CurrentWeather: React.FC<CurrentWeatherProps> = ({ weather, location }) => {
   const [astronomy, setAstronomy] = useState<AstronomyData | null>(null);
 
   useEffect(() => {
-    if (weather && weather.lat && weather.lon) {
+    if (location.lat && location.lon) {
       loadAstronomyData();
     }
-  }, [weather]);
+  }, [location]);
 
   const loadAstronomyData = async () => {
-    if (!weather) return;
-    
     try {
-      const data = await weatherService.getAstronomyData(weather.lat, weather.lon);
+      const data = await weatherService.getAstronomyData(location.lat, location.lon);
       setAstronomy(data);
     } catch (error) {
       console.error('Failed to load astronomy data:', error);
