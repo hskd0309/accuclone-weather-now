@@ -12,6 +12,7 @@ interface LocationState {
 interface LocationContextType extends LocationState {
   updateLocationByCity: (cityName: string) => Promise<void>;
   updateLocationByCoords: (lat: number, lon: number) => Promise<void>;
+  requestLocationPermission: () => Promise<boolean>;
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
@@ -31,6 +32,53 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     currentCity: 'Loading...',
     isLocationLoading: false,
   });
+
+  const requestLocationPermission = async (): Promise<boolean> => {
+    // Check if geolocation is supported
+    if (!navigator.geolocation) {
+      console.error('Geolocation is not supported by this browser');
+      return false;
+    }
+
+    // Check if we're in a secure context (HTTPS or localhost)
+    if (!window.isSecureContext && location.hostname !== 'localhost') {
+      console.error('Geolocation requires HTTPS or localhost');
+      return false;
+    }
+
+    // Check current permission status
+    if ('permissions' in navigator) {
+      try {
+        const permission = await navigator.permissions.query({ name: 'geolocation' });
+        console.log('Geolocation permission status:', permission.state);
+        
+        if (permission.state === 'denied') {
+          return false;
+        }
+      } catch (error) {
+        console.warn('Could not query geolocation permission:', error);
+      }
+    }
+
+    // Try to get location to trigger permission prompt
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          console.log('Location permission granted');
+          resolve(true);
+        },
+        (error) => {
+          console.error('Location permission denied or error:', error);
+          resolve(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000
+        }
+      );
+    });
+  };
 
   const updateLocationByCity = async (cityName: string) => {
     try {
@@ -86,6 +134,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       ...locationState,
       updateLocationByCity,
       updateLocationByCoords,
+      requestLocationPermission,
     }}>
       {children}
     </LocationContext.Provider>

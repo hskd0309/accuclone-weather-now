@@ -224,11 +224,32 @@ class WeatherService {
 
   async getCurrentLocation(): Promise<{lat: number, lon: number}> {
     return new Promise((resolve, reject) => {
+      // Check if geolocation is supported
       if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported'));
+        reject(new Error('Geolocation is not supported by this browser'));
         return;
       }
 
+      // Check if we're in a secure context for external browsers
+      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        reject(new Error('Geolocation requires HTTPS in production. Please enable HTTPS or use localhost for development.'));
+        return;
+      }
+
+      // Check permissions if available
+      if ('permissions' in navigator) {
+        navigator.permissions.query({ name: 'geolocation' }).then(permission => {
+          console.log('Geolocation permission:', permission.state);
+          if (permission.state === 'denied') {
+            reject(new Error('Geolocation permission denied. Please enable location access in your browser settings.'));
+            return;
+          }
+        }).catch(error => {
+          console.warn('Could not check geolocation permission:', error);
+        });
+      }
+
+      console.log('Requesting current location...');
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const coords = {
@@ -241,11 +262,28 @@ class WeatherService {
         },
         (error) => {
           console.error('Geolocation error:', error);
-          reject(new Error('Failed to get location'));
+          let errorMessage = 'Failed to get location. ';
+          
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage += 'Permission denied. Please enable location access in your browser settings.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage += 'Location information unavailable. Please check your GPS or network connection.';
+              break;
+            case error.TIMEOUT:
+              errorMessage += 'Location request timed out. Please try again.';
+              break;
+            default:
+              errorMessage += 'Unknown error occurred.';
+              break;
+          }
+          
+          reject(new Error(errorMessage));
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
+          timeout: 15000, // Increased timeout for better mobile compatibility
           maximumAge: 300000
         }
       );
