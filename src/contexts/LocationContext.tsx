@@ -45,7 +45,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       // Save the location for persistence without navigation
       weatherService.saveLastCity(cityName);
-      weatherService.saveLastLocation(weather.lat, weather.lon);
+      weatherService.saveLastLocation({ lat: weather.lat, lon: weather.lon });
     } catch (error) {
       console.error('Failed to update location by city:', error);
       setLocationState(prev => ({ ...prev, isLocationLoading: false }));
@@ -65,7 +65,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
       
       // Save the location for persistence without navigation
-      weatherService.saveLastLocation(lat, lon);
+      weatherService.saveLastLocation({ lat, lon });
     } catch (error) {
       console.error('Failed to update location by coords:', error);
       setLocationState(prev => ({ ...prev, isLocationLoading: false }));
