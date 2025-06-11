@@ -1,15 +1,19 @@
-
-import express from 'express';
-import cors from 'cors';
-import fetch from 'node-fetch';
+const express = require('express');
+const cors = require('cors');
+const fetch = require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const WEATHER_API_KEY = '9fa9c53c0ac54f09b35163914250906';
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY || '9fa9c53c0ac54f09b35163914250906';
 const WEATHER_API_BASE = 'https://api.weatherapi.com/v1';
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://your-frontend-domain.com', 'https://your-render-url.onrender.com']
+    : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Request logging middleware
@@ -26,7 +30,8 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    apiKey: WEATHER_API_KEY ? 'configured' : 'missing'
+    apiKey: WEATHER_API_KEY ? 'configured' : 'missing',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
