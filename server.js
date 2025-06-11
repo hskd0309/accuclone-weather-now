@@ -1,6 +1,7 @@
-const express = require('express');
-const cors = require('cors');
-const fetch = require('node-fetch');
+
+import express from 'express';
+import cors from 'cors';
+import fetch from 'node-fetch';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -10,7 +11,7 @@ const WEATHER_API_BASE = 'https://api.weatherapi.com/v1';
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-frontend-domain.com', 'https://your-render-url.onrender.com']
+    ? ['https://your-frontend-domain.com', 'https://accuclone-weather-now-1.onrender.com/']
     : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
   credentials: true
 }));
